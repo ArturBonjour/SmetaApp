@@ -2,8 +2,8 @@ import { Router, Request, Response } from 'express';
 import prisma from '../../lib/prisma';
 import { authMiddleware, JwtPayload } from '../../lib/auth';
 import ExcelJS from 'exceljs';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const router = Router();
 router.use(authMiddleware);
@@ -229,7 +229,7 @@ router.get('/:projectId/export/pdf', async (req: Request, res: Response): Promis
     const discountAmt = baseTotal * (estimation.discount / 100);
     const finalTotal = baseTotal + markupAmt - discountAmt;
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 42,
       head: [['№', 'Наименование', 'Раздел', 'Ед.', 'Кол.', 'Цена', 'Сумма']],
       body: tableData,
@@ -240,8 +240,8 @@ router.get('/:projectId/export/pdf', async (req: Request, res: Response): Promis
         ['', '', '', '', '', 'ИТОГО:', `${finalTotal.toLocaleString('ru-RU')} ₽`],
       ],
       theme: 'striped',
-      headStyles: { fillColor: [21, 101, 192], textColor: 255, fontStyle: 'bold' },
-      footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: 'bold' },
+      headStyles: { fillColor: [21, 101, 192] as [number, number, number], textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [240, 240, 240] as [number, number, number], textColor: 0, fontStyle: 'bold' },
       columnStyles: {
         0: { cellWidth: 8 },
         1: { cellWidth: 60 },
