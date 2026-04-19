@@ -4,6 +4,7 @@ import Konva from 'konva';
 import { useEditorStore } from '../../store/editor';
 import type { GeometryElement } from '../../types';
 import { v4 as uuid } from 'uuid';
+import ContextMenu from './ContextMenu';
 
 const ELEMENT_COLORS: Record<string, string> = {
   wall:       '#334155',
@@ -47,10 +48,6 @@ function toWorld(x: number, y: number, offset: { x: number; y: number }, stageSc
 export default function Editor() {
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const {
-    geometry, selectedId, tool, snapToGrid: snap, scale,
-    setSelectedId, addElement, updateElement, removeElement,
-  } = useEditorStore();
 
   const [drawing, setDrawing] = useState<DrawingState>({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
@@ -59,6 +56,10 @@ export default function Editor() {
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [isPanningActive, setIsPanningActive] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; elementId: string } | null>(null);
+  const { geometry, selectedId, tool, snapToGrid: snap, scale,
+    setSelectedId, addElement, updateElement, removeElement, duplicateElement,
+  } = useEditorStore();
 
   // Resize observer
   useEffect(() => {
@@ -354,6 +355,40 @@ export default function Editor() {
           {zoomPercent}% · 1☐=1м
         </div>
       </div>
+
+      {/* Context Menu */}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          elementId={ctxMenu.elementId}
+          onClose={() => setCtxMenu(null)}
+          onDelete={(eid) => removeElement(eid)}
+          onDuplicate={(eid) => duplicateElement(eid)}
+          onRename={(eid) => {
+            const newLabel = prompt('Новое название:');
+            if (newLabel !== null) updateElement(eid, { label: newLabel });
+          }}
+          onBringForward={(eid) => {
+            const els = useEditorStore.getState().geometry.elements;
+            const idx = els.findIndex((e) => e.id === eid);
+            if (idx < els.length - 1) {
+              const next = [...els];
+              [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+              useEditorStore.getState().setGeometry({ ...useEditorStore.getState().geometry, elements: next });
+            }
+          }}
+          onSendBackward={(eid) => {
+            const els = useEditorStore.getState().geometry.elements;
+            const idx = els.findIndex((e) => e.id === eid);
+            if (idx > 0) {
+              const next = [...els];
+              [next[idx], next[idx - 1]] = [next[idx - 1], next[idx]];
+              useEditorStore.getState().setGeometry({ ...useEditorStore.getState().geometry, elements: next });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

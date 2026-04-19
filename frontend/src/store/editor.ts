@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { v4 as uuid } from 'uuid';
 import type { GeometryElement, ProjectGeometry } from '../types';
 
 interface HistoryEntry {
@@ -22,6 +23,7 @@ interface EditorState {
   addElement: (el: GeometryElement) => void;
   updateElement: (id: string, updates: Partial<GeometryElement>) => void;
   removeElement: (id: string) => void;
+  duplicateElement: (id: string) => void;
   updateDimensions: (width: number, height: number) => void;
   undo: () => void;
   redo: () => void;
@@ -85,6 +87,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       geometry: { ...state.geometry, elements },
       ...pushHistory(state, elements),
       selectedId: state.selectedId === id ? null : state.selectedId,
+    });
+  },
+
+  duplicateElement: (id) => {
+    const state = get();
+    const orig = state.geometry.elements.find((e) => e.id === id);
+    if (!orig) return;
+    const copy: GeometryElement = {
+      ...JSON.parse(JSON.stringify(orig)),
+      id: uuid(),
+      x: (orig.x ?? 0) + 0.5,
+      y: (orig.y ?? 0) + 0.5,
+      x1: orig.x1 !== undefined ? orig.x1 + 0.5 : undefined,
+      y1: orig.y1 !== undefined ? orig.y1 + 0.5 : undefined,
+      x2: orig.x2 !== undefined ? orig.x2 + 0.5 : undefined,
+      y2: orig.y2 !== undefined ? orig.y2 + 0.5 : undefined,
+      label: orig.label ? `${orig.label} (копия)` : undefined,
+    };
+    const elements = [...state.geometry.elements, copy];
+    set({
+      geometry: { ...state.geometry, elements },
+      ...pushHistory(state, elements),
+      selectedId: copy.id,
     });
   },
 
