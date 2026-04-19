@@ -1,7 +1,7 @@
 import { useAuthStore } from '../../store/auth';
 import { useThemeStore } from '../../store/theme';
-import { useNavigate, Link } from 'react-router-dom';
-import { Building2, LogOut, Sun, Moon, Command, LayoutDashboard } from 'lucide-react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { Building2, LogOut, Sun, Moon, Command, LayoutDashboard, BookOpen } from 'lucide-react';
 
 interface NavbarProps {
   onCommandPalette?: () => void;
@@ -11,6 +11,7 @@ export default function Navbar({ onCommandPalette }: NavbarProps) {
   const { user, logout } = useAuthStore();
   const { dark, toggle } = useThemeStore();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -20,6 +21,11 @@ export default function Navbar({ onCommandPalette }: NavbarProps) {
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : '?';
+
+  const navLinks = [
+    { to: '/', icon: LayoutDashboard, label: 'Проекты' },
+    { to: '/catalog', icon: BookOpen, label: 'Каталог' },
+  ];
 
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg-card)]/90 backdrop-blur-md">
@@ -46,13 +52,24 @@ export default function Navbar({ onCommandPalette }: NavbarProps) {
 
         {/* Nav links */}
         <nav className="hidden md:flex items-center gap-1">
-          <Link
-            to="/"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[var(--text-2)] hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition-colors"
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            Проекты
-          </Link>
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            const active = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors
+                  ${active
+                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 font-medium'
+                    : 'text-[var(--text-2)] hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30'
+                  }`}
+              >
+                <Icon className="w-4 h-4" />
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Right side */}
@@ -89,4 +106,3 @@ export default function Navbar({ onCommandPalette }: NavbarProps) {
     </header>
   );
 }
-

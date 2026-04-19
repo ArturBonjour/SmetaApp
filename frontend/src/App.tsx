@@ -6,6 +6,7 @@ import { useThemeStore } from './store/theme';
 import LoginPage from './pages/LoginPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectEditorPage from './pages/ProjectEditorPage';
+import CatalogPage from './pages/CatalogPage';
 import CommandPalette from './components/CommandPalette';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 
@@ -79,6 +80,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <ProjectsPage onCommandPalette={() => setCmdOpen(true)} />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/catalog"
+          element={
+            <PrivateRoute>
+              <CatalogPage />
             </PrivateRoute>
           }
         />

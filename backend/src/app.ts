@@ -8,6 +8,7 @@ import authRouter from './domains/auth/router';
 import projectsRouter from './domains/projects/router';
 import catalogRouter from './domains/catalog/router';
 import estimationRouter from './domains/estimation/router';
+import activityRouter from './domains/activity/router';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -49,6 +50,7 @@ app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/projects', apiLimiter, projectsRouter);
 app.use('/api/catalog', apiLimiter, catalogRouter);
 app.use('/api/estimation', apiLimiter, estimationRouter);
+app.use('/api/activity', apiLimiter, activityRouter);
 
 // 404
 app.use((_req, res) => {

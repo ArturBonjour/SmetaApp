@@ -116,6 +116,19 @@ model EstimationItem {
   createdAt     DateTime    @default(now())
 }
 
+model ActivityLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  userName       String
+  action         String   // project.create | project.update | project.delete | project.save | project.status | project.duplicate | estimation.adjust | catalog.add
+  entityType     String   // project | catalog | estimation
+  entityId       String
+  entityName     String
+  metadata       String?  // JSON extras
+  createdAt      DateTime @default(now())
+}
+
 model ProjectTemplate {
   id           String   @id @default(uuid())
   name         String

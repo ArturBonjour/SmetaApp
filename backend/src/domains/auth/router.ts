@@ -23,7 +23,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     const user = await prisma.user.create({
       data: { email, passwordHash, name, role: 'admin', organizationId: org.id },
     });
-    const token = signToken({ userId: user.id, organizationId: org.id, role: user.role });
+    const token = signToken({ userId: user.id, organizationId: org.id, role: user.role, name: user.name });
     res.status(201).json({ token, user: { id: user.id, email, name, role: user.role, organizationId: org.id } });
   } catch (err) {
     res.status(500).json({ error: 'Registration failed' });
@@ -48,7 +48,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
-    const token = signToken({ userId: user.id, organizationId: user.organizationId, role: user.role });
+    const token = signToken({ userId: user.id, organizationId: user.organizationId, role: user.role, name: user.name });
     res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, organizationId: user.organizationId } });
   } catch {
     res.status(500).json({ error: 'Login failed' });
@@ -72,7 +72,7 @@ router.post('/demo', async (_req: Request, res: Response): Promise<void> => {
         },
       });
     }
-    const token = signToken({ userId: user.id, organizationId: user.organizationId, role: user.role });
+    const token = signToken({ userId: user.id, organizationId: user.organizationId, role: user.role, name: user.name });
     res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, organizationId: user.organizationId } });
   } catch {
     res.status(500).json({ error: 'Demo login failed' });

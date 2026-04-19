@@ -7,6 +7,7 @@ export interface JwtPayload {
   userId: string;
   organizationId: string;
   role: string;
+  name: string;
 }
 
 export const signToken = (payload: JwtPayload): string => {

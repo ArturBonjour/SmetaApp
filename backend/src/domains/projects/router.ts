@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../lib/prisma';
 import { authMiddleware, JwtPayload } from '../../lib/auth';
+import { logActivity } from '../activity/router';
 
 const router = Router();
 router.use(authMiddleware);
@@ -88,7 +89,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
 // POST /api/projects
 router.post('/', async (req: Request, res: Response): Promise<void> => {
-  const { organizationId } = getUser(req);
+  const user = getUser(req);
+  const { organizationId } = user;
   const { name, description, templateId } = req.body;
   if (!name) {
     res.status(400).json({ error: 'Name required' });
@@ -120,6 +122,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       include: { currentVersion: true },
     });
     await prisma.estimation.create({ data: { projectVersionId: ver.id, items: { create: [] } } });
+    await logActivity({ organizationId, userId: user.userId, userName: user.name, action: 'project.create', entityType: 'project', entityId: project.id, entityName: name });
     res.status(201).json(updated);
   } catch (err) {
     console.error(err);
@@ -152,7 +155,8 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 
 // PUT /api/projects/:id
 router.put('/:id', async (req: Request, res: Response): Promise<void> => {
-  const { organizationId } = getUser(req);
+  const user = getUser(req);
+  const { organizationId } = user;
   const { name, description, status } = req.body;
   try {
     const project = await prisma.project.findFirst({ where: { id: pid(req), organizationId } });
@@ -161,6 +165,9 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       where: { id: pid(req) },
       data: { ...(name && { name }), ...(description !== undefined && { description }), ...(status && { status }) },
     });
+    if (status && status !== project.status) {
+      await logActivity({ organizationId, userId: user.userId, userName: user.name, action: 'project.status', entityType: 'project', entityId: project.id, entityName: project.name, metadata: { from: project.status, to: status } });
+    }
     res.json(updated);
   } catch {
     res.status(500).json({ error: 'Failed to update' });
@@ -169,11 +176,13 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
 
 // DELETE /api/projects/:id
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
-  const { organizationId } = getUser(req);
+  const user = getUser(req);
+  const { organizationId } = user;
   try {
     const project = await prisma.project.findFirst({ where: { id: pid(req), organizationId } });
     if (!project) { res.status(404).json({ error: 'Not found' }); return; }
     await prisma.project.delete({ where: { id: pid(req) } });
+    await logActivity({ organizationId, userId: user.userId, userName: user.name, action: 'project.delete', entityType: 'project', entityId: project.id, entityName: project.name });
     res.status(204).send();
   } catch {
     res.status(500).json({ error: 'Failed to delete' });
@@ -225,7 +234,8 @@ router.post('/:id/duplicate', async (req: Request, res: Response): Promise<void>
 
 // PUT /api/projects/:id/geometry  — save geometry + recalculate
 router.put('/:id/geometry', async (req: Request, res: Response): Promise<void> => {
-  const { organizationId } = getUser(req);
+  const user = getUser(req);
+  const { organizationId } = user;
   const { geometryJson, createNewVersion } = req.body;
   if (!geometryJson) { res.status(400).json({ error: 'geometryJson required' }); return; }
   try {
@@ -248,6 +258,7 @@ router.put('/:id/geometry', async (req: Request, res: Response): Promise<void> =
       await prisma.project.update({ where: { id: project.id }, data: { currentVersionId: newVer.id } });
       await prisma.estimation.create({ data: { projectVersionId: newVer.id } });
       versionId = newVer.id;
+      await logActivity({ organizationId, userId: user.userId, userName: user.name, action: 'project.version', entityType: 'project', entityId: project.id, entityName: project.name, metadata: { version: count + 1 } });
     } else {
       await prisma.projectVersion.update({ where: { id: versionId }, data: { geometryJson } });
     }
@@ -260,6 +271,61 @@ router.put('/:id/geometry', async (req: Request, res: Response): Promise<void> =
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to save geometry' });
+  }
+});
+
+// GET /api/projects/:id/versions — list all versions
+router.get('/:id/versions', async (req: Request, res: Response): Promise<void> => {
+  const { organizationId } = getUser(req);
+  try {
+    const project = await prisma.project.findFirst({ where: { id: pid(req), organizationId } });
+    if (!project) { res.status(404).json({ error: 'Not found' }); return; }
+    const versions = await prisma.projectVersion.findMany({
+      where: { projectId: pid(req) },
+      orderBy: { version: 'desc' },
+      select: { id: true, version: true, label: true, createdAt: true },
+    });
+    res.json(versions);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch versions' });
+  }
+});
+
+// PUT /api/projects/:id/versions/:versionId/label — rename version
+router.put('/:id/versions/:versionId/label', async (req: Request, res: Response): Promise<void> => {
+  const { organizationId } = getUser(req);
+  const { label } = req.body;
+  try {
+    const project = await prisma.project.findFirst({ where: { id: pid(req), organizationId } });
+    if (!project) { res.status(404).json({ error: 'Not found' }); return; }
+    const ver = await prisma.projectVersion.update({
+      where: { id: req.params.versionId as string },
+      data: { label },
+    });
+    res.json(ver);
+  } catch {
+    res.status(500).json({ error: 'Failed to update label' });
+  }
+});
+
+// POST /api/projects/:id/versions/:versionId/restore — switch current version
+router.post('/:id/versions/:versionId/restore', async (req: Request, res: Response): Promise<void> => {
+  const user = getUser(req);
+  const { organizationId } = user;
+  try {
+    const project = await prisma.project.findFirst({ where: { id: pid(req), organizationId } });
+    if (!project) { res.status(404).json({ error: 'Not found' }); return; }
+    const ver = await prisma.projectVersion.findFirst({ where: { id: req.params.versionId as string, projectId: pid(req) } });
+    if (!ver) { res.status(404).json({ error: 'Version not found' }); return; }
+    const updated = await prisma.project.update({
+      where: { id: pid(req) },
+      data: { currentVersionId: ver.id },
+      include: { currentVersion: true },
+    });
+    await logActivity({ organizationId, userId: user.userId, userName: user.name, action: 'project.restore', entityType: 'project', entityId: project.id, entityName: project.name, metadata: { version: ver.version } });
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: 'Failed to restore version' });
   }
 });
 

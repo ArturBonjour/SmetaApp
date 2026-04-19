@@ -8,6 +8,7 @@ import Editor from '../components/Editor/Editor';
 import Toolbar from '../components/Editor/Toolbar';
 import PropertiesPanel from '../components/Editor/PropertiesPanel';
 import EstimationPanel from '../components/Estimation/EstimationPanel';
+import VersionHistoryPanel from '../components/Editor/VersionHistoryPanel';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Save, RefreshCw, Loader2, CheckCircle, PanelLeft, PanelRight, Command, History } from 'lucide-react';
 
@@ -23,6 +24,7 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
   const [estimationKey, setEstimationKey] = useState(0);
   const [showProps, setShowProps] = useState(true);
   const [showEstimation, setShowEstimation] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
   const { setGeometry, geometry, isDirty, markClean } = useEditorStore();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -37,6 +39,8 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); useEditorStore.getState().undo(); }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); useEditorStore.getState().redo(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveGeometry(); }
+      // Ctrl+Shift+S — save as new version
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S') { e.preventDefault(); saveGeometry(false, true); }
       // Tool shortcuts
       const toolMap: Record<string, string> = { v: 'select', w: 'wall', f: 'floor', r: 'roof', n: 'foundation', i: 'window', d: 'door' };
       if (!e.ctrlKey && !e.metaKey && !e.altKey && toolMap[e.key.toLowerCase()]) {
@@ -69,14 +73,14 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
     }
   };
 
-  const saveGeometry = useCallback(async (silent = false) => {
+  const saveGeometry = useCallback(async (silent = false, newVersion = false) => {
     if (!id) return;
     setSaving(true);
     try {
-      await api.put(`/projects/${id}/geometry`, { geometryJson: JSON.stringify(geometry) });
+      await api.put(`/projects/${id}/geometry`, { geometryJson: JSON.stringify(geometry), createNewVersion: newVersion });
       markClean();
       setEstimationKey((k) => k + 1);
-      if (!silent) toast.success('Сохранено');
+      if (!silent) toast.success(newVersion ? 'Создана новая версия' : 'Сохранено');
     } catch {
       if (!silent) toast.error('Ошибка сохранения');
     } finally {
@@ -157,8 +161,8 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
           <PanelRight className="w-4 h-4" />
         </button>
         <button
-          onClick={() => {}}
-          className="p-1.5 rounded-lg text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)] transition-colors"
+          onClick={() => setShowHistory((s) => !s)}
+          className={`p-1.5 rounded-lg transition-colors ${showHistory ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600' : 'text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)]'}`}
           title="История версий"
         >
           <History className="w-4 h-4" />
@@ -195,6 +199,25 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
               className="flex-shrink-0 bg-[var(--bg-sidebar)] border-l border-[var(--border)] overflow-y-auto overflow-x-hidden"
             >
               <PropertiesPanel projectId={id!} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Version History Panel */}
+        <AnimatePresence>
+          {showHistory && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 260, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex-shrink-0 bg-[var(--bg-sidebar)] border-l border-[var(--border)] overflow-y-auto overflow-x-hidden"
+            >
+              <VersionHistoryPanel
+                projectId={id!}
+                currentVersionId={project?.currentVersionId}
+                onRestored={() => { loadProject(); setEstimationKey((k) => k + 1); setShowHistory(false); }}
+              />
             </motion.div>
           )}
         </AnimatePresence>

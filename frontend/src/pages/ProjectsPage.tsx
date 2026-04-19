@@ -6,6 +6,7 @@ import type { Project, ProjectTemplate } from '../types';
 import toast from 'react-hot-toast';
 import { Plus, Building2, Clock, Trash2, ChevronRight, Search, Copy, TrendingUp, FolderOpen, CheckCircle, Archive } from 'lucide-react';
 import Navbar from '../components/Layout/Navbar';
+import ActivityFeed from '../components/ActivityFeed';
 
 interface Props {
   onCommandPalette?: () => void;
@@ -313,8 +314,11 @@ export default function ProjectsPage({ onCommandPalette }: Props) {
         </AnimatePresence>
 
         {/* Projects Grid */}
+        <div className="flex gap-6">
+          {/* Main project list */}
+          <div className="flex-1 min-w-0">
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
@@ -340,7 +344,7 @@ export default function ProjectsPage({ onCommandPalette }: Props) {
         ) : (
           <motion.div
             layout
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
             <AnimatePresence>
               {filtered.map((project, i) => {
@@ -423,6 +427,13 @@ export default function ProjectsPage({ onCommandPalette }: Props) {
             </AnimatePresence>
           </motion.div>
         )}
+          </div>
+
+          {/* Activity feed sidebar */}
+          <div className="w-72 flex-shrink-0 hidden xl:block">
+            <ActivityFeed />
+          </div>
+        </div>
       </div>
     </div>
   );
