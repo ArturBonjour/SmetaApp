@@ -37,13 +37,11 @@ function snapToGrid(val: number, grid: number): number {
   return Math.round(val / grid) * grid;
 }
 
-function pxToM(px: number, scale: number): number {
-  return parseFloat((px / scale).toFixed(2));
-}
-
-// Transform a stage-container position to canvas (world) position
-function toWorld(x: number, y: number, offset: { x: number; y: number }, stageScale: number) {
-  return { x: (x - offset.x) / stageScale, y: (y - offset.y) / stageScale };
+// Transform a stage-container position to canvas (meter) position
+function toWorld(x: number, y: number, offset: { x: number; y: number }, stageScale: number, scale: number) {
+  const layerX = (x - offset.x) / stageScale;
+  const layerY = (y - offset.y) / stageScale;
+  return { x: layerX / scale, y: layerY / scale }; // returns meters
 }
 
 export default function Editor() {
@@ -141,14 +139,15 @@ export default function Editor() {
     if (!stage) return { x: 0, y: 0 };
     const pointer = stage.getPointerPosition();
     if (!pointer) return { x: 0, y: 0 };
-    return toWorld(pointer.x, pointer.y, stageOffset, stageScale);
-  }, [stageOffset, stageScale]);
+    return toWorld(pointer.x, pointer.y, stageOffset, stageScale, scale); // returns meters
+  }, [stageOffset, stageScale, scale]);
 
   const getSnappedWorldPos = useCallback(() => {
-    const { x, y } = getWorldPos();
+    const { x, y } = getWorldPos(); // meters
     if (!snap) return { x, y };
-    return { x: snapToGrid(x, scale), y: snapToGrid(y, scale) };
-  }, [getWorldPos, snap, scale]);
+    const SNAP_STEP = 0.5; // snap to 0.5m grid
+    return { x: Math.round(x / SNAP_STEP) * SNAP_STEP, y: Math.round(y / SNAP_STEP) * SNAP_STEP };
+  }, [getWorldPos, snap]);
 
   const handleStageMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     // Pan with space or middle mouse
@@ -190,15 +189,16 @@ export default function Editor() {
     const { startX, startY, currentX, currentY } = drawing;
     setDrawing((d) => ({ ...d, active: false }));
 
-    const dx = (currentX - startX) * scale;
-    const dy = (currentY - startY) * scale;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 5) return;
+    // startX/currentX are in METERS (returned by getSnappedWorldPos)
+    const dx = currentX - startX; // meters
+    const dy = currentY - startY; // meters
+    const distM = Math.sqrt(dx * dx + dy * dy);
+    if (distM < 0.1) return; // less than 10cm, ignore
 
     const id = uuid();
-    const lengthM = pxToM(Math.sqrt(dx * dx + dy * dy), scale);
-    const widthM = parseFloat(Math.abs(currentX - startX).toFixed(2));
-    const depthM = parseFloat(Math.abs(currentY - startY).toFixed(2));
+    const lengthM = parseFloat(distM.toFixed(2));
+    const widthM = parseFloat(Math.abs(dx).toFixed(2));
+    const depthM = parseFloat(Math.abs(dy).toFixed(2));
     const minX = Math.min(startX, currentX);
     const minY = Math.min(startY, currentY);
 
