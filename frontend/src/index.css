@@ -1,41 +1,66 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 :root {
-  --primary: #1565C0;
-  --primary-dark: #0D47A1;
-  --secondary: #E3F2FD;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --accent: #6366f1;
+
+  --bg-page: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-sidebar: #ffffff;
+  --bg-input: #f8fafc;
+
+  --text-1: #0f172a;
+  --text-2: #334155;
+  --text-3: #64748b;
+
+  --border: #e2e8f0;
+  --border-focus: #93c5fd;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-card-hover: 0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
-* {
-  box-sizing: border-box;
+.dark {
+  --bg-page: #0b0f1a;
+  --bg-card: #141824;
+  --bg-sidebar: #111827;
+  --bg-input: #1e2535;
+
+  --text-1: #f1f5f9;
+  --text-2: #cbd5e1;
+  --text-3: #64748b;
+
+  --border: #1e2d4a;
+  --border-focus: #3b82f6;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
+  --shadow-card-hover: 0 4px 12px rgba(0,0,0,.4), 0 2px 4px rgba(0,0,0,.25);
 }
+
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: #f8fafc;
-  color: #1e293b;
-}
-
-.dark body {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--bg-page);
+  color: var(--text-1);
+  transition: background 0.25s, color 0.25s;
 }
 
 /* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: #475569;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.dark ::-webkit-scrollbar-thumb { background: #2d3f5c; }
+
+/* Smooth theme transition */
+* { transition: background-color 0.2s, border-color 0.2s; }
+svg, button, a { transition: none; }
+

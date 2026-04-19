@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/api';
 import type { Project } from '../types';
 import { useEditorStore } from '../store/editor';
@@ -8,9 +9,13 @@ import Toolbar from '../components/Editor/Toolbar';
 import PropertiesPanel from '../components/Editor/PropertiesPanel';
 import EstimationPanel from '../components/Estimation/EstimationPanel';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Save, RefreshCw, Loader2, CheckCircle, PanelLeft, PanelRight } from 'lucide-react';
+import { ArrowLeft, Save, RefreshCw, Loader2, CheckCircle, PanelLeft, PanelRight, Command, History } from 'lucide-react';
 
-export default function ProjectEditorPage() {
+interface Props {
+  onCommandPalette?: () => void;
+}
+
+export default function ProjectEditorPage({ onCommandPalette }: Props) {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,9 +33,15 @@ export default function ProjectEditorPage() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as Element)?.tagName)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); useEditorStore.getState().undo(); }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); useEditorStore.getState().redo(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveGeometry(); }
+      // Tool shortcuts
+      const toolMap: Record<string, string> = { v: 'select', w: 'wall', f: 'floor', r: 'roof', n: 'foundation', i: 'window', d: 'door' };
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && toolMap[e.key.toLowerCase()]) {
+        useEditorStore.getState().setTool(toolMap[e.key.toLowerCase()] as any);
+      }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
@@ -40,9 +51,7 @@ export default function ProjectEditorPage() {
   useEffect(() => {
     if (!isDirty || !id) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      saveGeometry(true);
-    }, 2000);
+    saveTimer.current = setTimeout(() => { saveGeometry(true); }, 2000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [geometry, isDirty, id]);
 
@@ -51,8 +60,7 @@ export default function ProjectEditorPage() {
       const { data } = await api.get(`/projects/${id}`);
       setProject(data);
       if (data.currentVersion?.geometryJson) {
-        const g = JSON.parse(data.currentVersion.geometryJson);
-        setGeometry(g);
+        setGeometry(JSON.parse(data.currentVersion.geometryJson));
       }
     } catch {
       toast.error('Ошибка загрузки проекта');
@@ -65,11 +73,9 @@ export default function ProjectEditorPage() {
     if (!id) return;
     setSaving(true);
     try {
-      await api.put(`/projects/${id}/geometry`, {
-        geometryJson: JSON.stringify(geometry),
-      });
+      await api.put(`/projects/${id}/geometry`, { geometryJson: JSON.stringify(geometry) });
       markClean();
-      setEstimationKey(k => k + 1);
+      setEstimationKey((k) => k + 1);
       if (!silent) toast.success('Сохранено');
     } catch {
       if (!silent) toast.error('Ошибка сохранения');
@@ -80,60 +86,92 @@ export default function ProjectEditorPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)]">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-[var(--bg-page)]">
       {/* Top bar */}
-      <div className="h-12 bg-white border-b border-gray-200 flex items-center px-3 gap-3 flex-shrink-0 z-30">
-        <Link to="/" className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+      <div className="h-12 bg-[var(--bg-card)] border-b border-[var(--border)] flex items-center px-3 gap-2 flex-shrink-0 z-30">
+        <Link
+          to="/"
+          className="p-1.5 text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)] rounded-lg transition-colors"
+          title="Назад к проектам"
+        >
           <ArrowLeft className="w-4 h-4" />
         </Link>
 
+        <div className="w-px h-5 bg-[var(--border)]" />
+
         <div className="flex-1 min-w-0">
-          <h1 className="font-semibold text-gray-800 truncate">{project?.name || 'Проект'}</h1>
+          <h1 className="font-semibold text-[var(--text-1)] text-sm truncate">{project?.name || 'Проект'}</h1>
         </div>
 
-        {/* Status indicator */}
-        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-          {saving ? (
-            <><RefreshCw className="w-3 h-3 animate-spin" />Сохранение...</>
-          ) : isDirty ? (
-            <><div className="w-2 h-2 rounded-full bg-orange-400" />Изменено</>
-          ) : (
-            <><CheckCircle className="w-3 h-3 text-green-500" />Сохранено</>
-          )}
-        </div>
+        {/* Save status */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={saving ? 'saving' : isDirty ? 'dirty' : 'saved'}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            className="flex items-center gap-1.5 text-xs text-[var(--text-3)]"
+          >
+            {saving ? (
+              <><RefreshCw className="w-3 h-3 animate-spin" />Сохранение...</>
+            ) : isDirty ? (
+              <><div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />Изменено</>
+            ) : (
+              <><CheckCircle className="w-3 h-3 text-emerald-500" />Сохранено</>
+            )}
+          </motion.div>
+        </AnimatePresence>
 
         {/* Save button */}
         <button
           onClick={() => saveGeometry(false)}
           disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
         >
           <Save className="w-3.5 h-3.5" />
           Сохранить
         </button>
 
-        {/* Panel toggles */}
+        <div className="w-px h-5 bg-[var(--border)]" />
+
+        {/* Panel toggles + command palette */}
         <button
-          onClick={() => setShowProps(s => !s)}
-          className={`p-1.5 rounded-lg transition-colors ${showProps ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+          onClick={() => setShowProps((s) => !s)}
+          className={`p-1.5 rounded-lg transition-colors text-xs ${showProps ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600' : 'text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)]'}`}
           title="Свойства"
         >
           <PanelLeft className="w-4 h-4" />
         </button>
         <button
-          onClick={() => setShowEstimation(s => !s)}
-          className={`p-1.5 rounded-lg transition-colors ${showEstimation ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+          onClick={() => setShowEstimation((s) => !s)}
+          className={`p-1.5 rounded-lg transition-colors ${showEstimation ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600' : 'text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)]'}`}
           title="Смета"
         >
           <PanelRight className="w-4 h-4" />
         </button>
+        <button
+          onClick={() => {}}
+          className="p-1.5 rounded-lg text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)] transition-colors"
+          title="История версий"
+        >
+          <History className="w-4 h-4" />
+        </button>
+        {onCommandPalette && (
+          <button
+            onClick={onCommandPalette}
+            className="p-1.5 rounded-lg text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)] transition-colors"
+            title="Командная палитра (⌘K)"
+          >
+            <Command className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Main layout */}
@@ -147,18 +185,34 @@ export default function ProjectEditorPage() {
         </div>
 
         {/* Properties Panel */}
-        {showProps && (
-          <div className="w-60 flex-shrink-0 bg-white border-l border-gray-200 overflow-y-auto">
-            <PropertiesPanel projectId={id!} />
-          </div>
-        )}
+        <AnimatePresence>
+          {showProps && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 240, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex-shrink-0 bg-[var(--bg-sidebar)] border-l border-[var(--border)] overflow-y-auto overflow-x-hidden"
+            >
+              <PropertiesPanel projectId={id!} />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Estimation Panel */}
-        {showEstimation && (
-          <div className="w-72 flex-shrink-0 bg-white border-l border-gray-200">
-            <EstimationPanel projectId={id!} refreshKey={estimationKey} />
-          </div>
-        )}
+        <AnimatePresence>
+          {showEstimation && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 288, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex-shrink-0 bg-[var(--bg-sidebar)] border-l border-[var(--border)] overflow-hidden"
+            >
+              <EstimationPanel projectId={id!} refreshKey={estimationKey} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
