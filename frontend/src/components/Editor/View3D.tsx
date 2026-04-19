@@ -1,7 +1,6 @@
-import { Suspense, useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Suspense } from 'react';
+import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Environment, Text, PerspectiveCamera } from '@react-three/drei';
-import * as THREE from 'three';
 import type { GeometryElement } from '../../types';
 
 // --- Element colours matching 2D ---
@@ -14,13 +13,8 @@ const MATERIALS = {
   door:       { color: '#fca5a5', emissive: '#7f1d1d' },
 };
 
-// Animated auto-rotate when no user interaction
+// Placeholder for future auto-rotate animation
 function AutoRotateCamera() {
-  const t = useRef(0);
-  useFrame((state, delta) => {
-    t.current += delta * 0.12;
-    // Subtle auto-sway only if user hasn't touched controls
-  });
   return null;
 }
 

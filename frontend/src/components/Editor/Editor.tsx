@@ -302,6 +302,11 @@ export default function Editor() {
               scale={scale}
               selected={selectedId === el.id}
               onSelect={() => { if (tool === 'select') setSelectedId(el.id); }}
+              onContextMenu={(e) => {
+                e.evt.preventDefault();
+                setSelectedId(el.id);
+                setCtxMenu({ x: e.evt.clientX, y: e.evt.clientY, elementId: el.id });
+              }}
               onUpdate={(updates) => updateElement(el.id, updates)}
               snap={snap}
               gridSize={scale}
@@ -399,12 +404,13 @@ interface ElementRendererProps {
   scale: number;
   selected: boolean;
   onSelect: () => void;
+  onContextMenu: (e: Konva.KonvaEventObject<MouseEvent>) => void;
   onUpdate: (updates: Partial<GeometryElement>) => void;
   snap: boolean;
   gridSize: number;
 }
 
-function ElementRenderer({ el, scale, selected, onSelect, onUpdate, snap, gridSize }: ElementRendererProps) {
+function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdate, snap, gridSize }: ElementRendererProps) {
   const color = ELEMENT_COLORS[el.type] || '#ccc';
   const stroke = ELEMENT_STROKE[el.type] || '#999';
   const strokeWidth = selected ? 2.5 : el.type === 'wall' ? 5 : 1.5;
@@ -437,7 +443,7 @@ function ElementRenderer({ el, scale, selected, onSelect, onUpdate, snap, gridSi
     const x2 = (el.x2 ?? 0) * scale;
     const y2 = (el.y2 ?? 0) * scale;
     return (
-      <Group draggable onDragEnd={handleDragEnd} x={x1} y={y1} onClick={onSelect}>
+      <Group draggable onDragEnd={handleDragEnd} x={x1} y={y1} onClick={onSelect} onContextMenu={onContextMenu}>
         <Line
           points={[0, 0, x2 - x1, y2 - y1]}
           stroke={selected ? '#3b82f6' : stroke}
@@ -461,7 +467,7 @@ function ElementRenderer({ el, scale, selected, onSelect, onUpdate, snap, gridSi
     const W = 1.2 * scale;
     const H = 0.5 * scale;
     return (
-      <Group draggable x={cx} y={cy} onDragEnd={handleDragEnd} onClick={onSelect}>
+      <Group draggable x={cx} y={cy} onDragEnd={handleDragEnd} onClick={onSelect} onContextMenu={onContextMenu}>
         <Rect x={-W / 2} y={-H / 2} width={W} height={H} fill="#bae6fd" stroke={selected ? '#3b82f6' : '#0ea5e9'} strokeWidth={selected ? 2 : 1.5} cornerRadius={2} />
         <Line points={[0, -H / 2, 0, H / 2]} stroke="#0ea5e9" strokeWidth={1} />
         {selected && <Rect x={-W / 2 - 3} y={-H / 2 - 3} width={W + 6} height={H + 6} stroke="#3b82f6" strokeWidth={1.5} dash={[4, 2]} fill="transparent" />}
@@ -475,7 +481,7 @@ function ElementRenderer({ el, scale, selected, onSelect, onUpdate, snap, gridSi
     const W = 0.9 * scale;
     const H = 2.0 * scale;
     return (
-      <Group draggable x={cx} y={cy} onDragEnd={handleDragEnd} onClick={onSelect}>
+      <Group draggable x={cx} y={cy} onDragEnd={handleDragEnd} onClick={onSelect} onContextMenu={onContextMenu}>
         <Rect x={-W / 2} y={-H / 2} width={W} height={H} fill="#fecaca" stroke={selected ? '#3b82f6' : '#ef4444'} strokeWidth={selected ? 2 : 1.5} cornerRadius={2} />
         {/* Door swing arc */}
         <ArcShape radius={H * 0.6} startAngle={-45} endAngle={45} stroke="#ef4444" strokeWidth={1} />
@@ -491,7 +497,7 @@ function ElementRenderer({ el, scale, selected, onSelect, onUpdate, snap, gridSi
   const rh = (el.depth ?? 0) * scale;
 
   return (
-    <Group draggable x={rx} y={ry} onDragEnd={handleDragEnd} onClick={onSelect}>
+    <Group draggable x={rx} y={ry} onDragEnd={handleDragEnd} onClick={onSelect} onContextMenu={onContextMenu}>
       <Rect
         width={rw} height={rh}
         fill={color}
