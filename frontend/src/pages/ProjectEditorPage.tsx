@@ -7,11 +7,12 @@ import { useEditorStore } from '../store/editor';
 import Editor from '../components/Editor/Editor';
 import Toolbar from '../components/Editor/Toolbar';
 import PropertiesPanel from '../components/Editor/PropertiesPanel';
+import ObjectsPanel from '../components/Editor/ObjectsPanel';
 import EstimationPanel from '../components/Estimation/EstimationPanel';
 import VersionHistoryPanel from '../components/Editor/VersionHistoryPanel';
 import View3D from '../components/Editor/View3D';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Save, RefreshCw, Loader2, CheckCircle, PanelLeft, PanelRight, Command, History, Box, LayoutDashboard } from 'lucide-react';
+import { ArrowLeft, Save, RefreshCw, Loader2, CheckCircle, PanelLeft, PanelRight, Command, History, Box, LayoutDashboard, Layers3, Pencil, Check, X } from 'lucide-react';
 
 interface Props {
   onCommandPalette?: () => void;
@@ -26,13 +27,25 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
   const [showProps, setShowProps] = useState(true);
   const [showEstimation, setShowEstimation] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
+  const [showObjects, setShowObjects] = useState(true);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [rightTab, setRightTab] = useState<'properties' | 'objects'>('objects');
+  // Inline rename
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
   const { setGeometry, geometry, isDirty, markClean } = useEditorStore();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (id) loadProject();
   }, [id]);
+
+  // Focus rename input when opened
+  useEffect(() => {
+    if (renaming && renameInputRef.current) renameInputRef.current.focus();
+  }, [renaming]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -41,14 +54,16 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); useEditorStore.getState().undo(); }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); useEditorStore.getState().redo(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveGeometry(); }
-      // Ctrl+Shift+S — save as new version
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S') { e.preventDefault(); saveGeometry(false, true); }
-      // Toggle 3D with Alt+3
       if (e.altKey && e.key === '3') { e.preventDefault(); setViewMode((m) => m === '2d' ? '3d' : '2d'); }
-      // Tool shortcuts
-      const toolMap: Record<string, string> = { v: 'select', w: 'wall', f: 'floor', r: 'roof', n: 'foundation', i: 'window', d: 'door' };
+      const toolMap: Record<string, string> = { v: 'select', w: 'wall', r: 'roof', n: 'foundation', i: 'window', d: 'door' };
+      // Note: 'f' is reserved for fit-to-screen in Editor.tsx
       if (!e.ctrlKey && !e.metaKey && !e.altKey && toolMap[e.key.toLowerCase()]) {
         useEditorStore.getState().setTool(toolMap[e.key.toLowerCase()] as any);
+      }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'f' && !e.shiftKey) {
+        // 'f' is handled in Editor.tsx for fit-to-screen
+        return;
       }
     };
     window.addEventListener('keydown', handleKey);
@@ -92,6 +107,19 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
     }
   }, [id, geometry, markClean]);
 
+  const commitRename = async () => {
+    if (!renameValue.trim() || !id) { setRenaming(false); return; }
+    try {
+      await api.put(`/projects/${id}`, { name: renameValue.trim() });
+      setProject((p) => p ? { ...p, name: renameValue.trim() } : p);
+      toast.success('Переименовано');
+    } catch {
+      toast.error('Ошибка переименования');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)]">
@@ -114,8 +142,38 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
 
         <div className="w-px h-5 bg-[var(--border)]" />
 
-        <div className="flex-1 min-w-0">
-          <h1 className="font-semibold text-[var(--text-1)] text-sm truncate">{project?.name || 'Проект'}</h1>
+        {/* Project title with inline rename */}
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          {renaming ? (
+            <>
+              <input
+                ref={renameInputRef}
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename();
+                  if (e.key === 'Escape') setRenaming(false);
+                  e.stopPropagation();
+                }}
+                className="flex-1 min-w-0 max-w-xs text-sm font-semibold bg-[var(--bg-input)] border border-blue-500 rounded-lg px-2 py-1 text-[var(--text-1)] focus:outline-none"
+              />
+              <button onClick={commitRename} className="p-1 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-lg">
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => setRenaming(false)} className="p-1 text-[var(--text-3)] hover:bg-[var(--bg-input)] rounded-lg">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => { setRenameValue(project?.name || ''); setRenaming(true); }}
+              className="group flex items-center gap-1.5 min-w-0 hover:bg-[var(--bg-input)] rounded-lg px-2 py-1 transition-colors"
+              title="Нажмите для переименования"
+            >
+              <h1 className="font-semibold text-[var(--text-1)] text-sm truncate">{project?.name || 'Проект'}</h1>
+              <Pencil className="w-3 h-3 text-[var(--text-3)] opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity" />
+            </button>
+          )}
         </div>
 
         {/* 2D / 3D toggle */}
@@ -177,10 +235,17 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
 
         <div className="w-px h-5 bg-[var(--border)]" />
 
-        {/* Panel toggles + command palette */}
+        {/* Panel toggles */}
         <button
-          onClick={() => setShowProps((s) => !s)}
-          className={`p-1.5 rounded-lg transition-colors text-xs ${showProps ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600' : 'text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)]'}`}
+          onClick={() => { setShowObjects((s) => !s); setRightTab('objects'); }}
+          className={`p-1.5 rounded-lg transition-colors ${showObjects && rightTab === 'objects' ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600' : 'text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)]'}`}
+          title="Объекты"
+        >
+          <Layers3 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => { setShowProps((s) => !s); setRightTab('properties'); }}
+          className={`p-1.5 rounded-lg transition-colors ${showProps && rightTab === 'properties' ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600' : 'text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)]'}`}
           title="Свойства"
         >
           <PanelLeft className="w-4 h-4" />
@@ -248,17 +313,46 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
           </AnimatePresence>
         </div>
 
-        {/* Properties Panel */}
+        {/* Left side panel: Objects or Properties (tabs) */}
         <AnimatePresence>
-          {showProps && (
+          {(showObjects || showProps) && (
             <motion.div
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: 240, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="flex-shrink-0 bg-[var(--bg-sidebar)] border-l border-[var(--border)] overflow-y-auto overflow-x-hidden"
+              className="flex-shrink-0 flex flex-col bg-[var(--bg-sidebar)] border-l border-[var(--border)] overflow-hidden"
             >
-              <PropertiesPanel projectId={id!} />
+              {/* Tab bar */}
+              <div className="flex border-b border-[var(--border)] flex-shrink-0">
+                <button
+                  onClick={() => { setRightTab('objects'); setShowObjects(true); setShowProps(false); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
+                    rightTab === 'objects' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
+                  }`}
+                >
+                  <Layers3 className="w-3.5 h-3.5" />
+                  Объекты
+                </button>
+                <button
+                  onClick={() => { setRightTab('properties'); setShowProps(true); setShowObjects(false); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
+                    rightTab === 'properties' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
+                  }`}
+                >
+                  <PanelLeft className="w-3.5 h-3.5" />
+                  Свойства
+                </button>
+              </div>
+
+              {/* Panel content */}
+              <div className="flex-1 overflow-hidden">
+                {rightTab === 'objects' ? (
+                  <ObjectsPanel />
+                ) : (
+                  <PropertiesPanel projectId={id!} />
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

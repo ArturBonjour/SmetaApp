@@ -16,6 +16,8 @@ interface EditorState {
   history: HistoryEntry[];
   historyIndex: number;
   isDirty: boolean;
+  hiddenIds: Set<string>;
+  clipboard: GeometryElement | null;
 
   setGeometry: (g: ProjectGeometry) => void;
   setTool: (t: EditorState['tool']) => void;
@@ -30,6 +32,9 @@ interface EditorState {
   markClean: () => void;
   setScale: (s: number) => void;
   toggleSnap: () => void;
+  toggleHidden: (id: string) => void;
+  copyElement: (id: string) => void;
+  pasteElement: () => void;
 }
 
 const MAX_HISTORY = 50;
@@ -54,6 +59,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   history: [],
   historyIndex: -1,
   isDirty: false,
+  hiddenIds: new Set(),
+  clipboard: null,
 
   setGeometry: (g) => set({ geometry: g, history: [{ elements: JSON.parse(JSON.stringify(g.elements)) }], historyIndex: 0, isDirty: false }),
 
@@ -137,4 +144,39 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   markClean: () => set({ isDirty: false }),
   setScale: (scale) => set({ scale }),
   toggleSnap: () => set((s) => ({ snapToGrid: !s.snapToGrid })),
+
+  toggleHidden: (id) => set((s) => {
+    const next = new Set(s.hiddenIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return { hiddenIds: next };
+  }),
+
+  copyElement: (id) => {
+    const el = get().geometry.elements.find((e) => e.id === id);
+    if (el) set({ clipboard: JSON.parse(JSON.stringify(el)) });
+  },
+
+  pasteElement: () => {
+    const { clipboard } = get();
+    if (!clipboard) return;
+    const copy: GeometryElement = {
+      ...JSON.parse(JSON.stringify(clipboard)),
+      id: uuid(),
+      x: (clipboard.x ?? 0) + 1,
+      y: (clipboard.y ?? 0) + 1,
+      x1: clipboard.x1 !== undefined ? clipboard.x1 + 1 : undefined,
+      y1: clipboard.y1 !== undefined ? clipboard.y1 + 1 : undefined,
+      x2: clipboard.x2 !== undefined ? clipboard.x2 + 1 : undefined,
+      y2: clipboard.y2 !== undefined ? clipboard.y2 + 1 : undefined,
+      label: clipboard.label ? `${clipboard.label} (копия)` : undefined,
+    };
+    const state = get();
+    const elements = [...state.geometry.elements, copy];
+    set({
+      geometry: { ...state.geometry, elements },
+      ...pushHistory(state, elements),
+      selectedId: copy.id,
+      clipboard: copy, // allow repeated paste with offset
+    });
+  },
 }));

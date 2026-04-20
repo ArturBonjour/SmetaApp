@@ -59,7 +59,7 @@ export default function Editor() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; elementId: string } | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null);
   const shiftRef = useRef(false);
-  const { geometry, selectedId, tool, snapToGrid: snap, scale,
+  const { geometry, selectedId, tool, snapToGrid: snap, scale, hiddenIds,
     setSelectedId, addElement, updateElement, removeElement, duplicateElement,
   } = useEditorStore();
 
@@ -103,6 +103,18 @@ export default function Editor() {
         setStageScale(1);
         setStageOffset({ x: 40, y: 40 });
       }
+      // Copy / Paste
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedId) {
+        useEditorStore.getState().copyElement(selectedId);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        useEditorStore.getState().pasteElement();
+      }
+      // Fit to screen (F key)
+      if (e.key === 'f' || e.key === 'F') {
+        if ((e.ctrlKey || e.metaKey) || e.altKey) return;
+        fitToScreen();
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Shift') { shiftRef.current = false; return; }
@@ -116,7 +128,33 @@ export default function Editor() {
     };
   }, [selectedId, removeElement, setSelectedId]);
 
-  // Mouse wheel zoom
+  // Fit-to-screen: zoom to show all elements
+  const fitToScreen = useCallback(() => {
+    const els = useEditorStore.getState().geometry.elements;
+    if (els.length === 0) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const el of els) {
+      if (el.type === 'wall') {
+        minX = Math.min(minX, (el.x1 ?? 0) * scale, (el.x2 ?? 0) * scale);
+        minY = Math.min(minY, (el.y1 ?? 0) * scale, (el.y2 ?? 0) * scale);
+        maxX = Math.max(maxX, (el.x1 ?? 0) * scale, (el.x2 ?? 0) * scale);
+        maxY = Math.max(maxY, (el.y1 ?? 0) * scale, (el.y2 ?? 0) * scale);
+      } else {
+        const x = (el.x ?? 0) * scale, y = (el.y ?? 0) * scale;
+        const w = (el.width ?? 1) * scale, h = (el.depth ?? 1) * scale;
+        minX = Math.min(minX, x); minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+      }
+    }
+    const pad = 60;
+    const bw = maxX - minX, bh = maxY - minY;
+    const sw = stageSize.width - pad * 2, sh = stageSize.height - pad * 2;
+    const newScale = Math.min(sw / bw, sh / bh, 4);
+    const offsetX = (stageSize.width - bw * newScale) / 2 - minX * newScale;
+    const offsetY = (stageSize.height - bh * newScale) / 2 - minY * newScale;
+    setStageScale(newScale);
+    setStageOffset({ x: offsetX, y: offsetY });
+  }, [scale, stageSize]);
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
     const scaleBy = 1.08;
@@ -370,7 +408,7 @@ export default function Editor() {
 
         {/* Elements */}
         <Layer>
-          {geometry.elements.map((el) => (
+          {geometry.elements.filter((el) => !hiddenIds.has(el.id)).map((el) => (
             <ElementRenderer
               key={el.id}
               el={el}
@@ -501,6 +539,14 @@ export default function Editor() {
 
       {/* Status bar */}
       <div className="absolute bottom-4 right-4 flex items-center gap-2">
+        {/* Fit to screen button */}
+        <button
+          onClick={fitToScreen}
+          title="По размеру (F)"
+          className="bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-lg px-2.5 py-1.5 text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-white dark:hover:bg-slate-700 transition-colors"
+        >
+          ⊡
+        </button>
         {/* Minimap */}
         <Minimap
           elements={geometry.elements}
@@ -814,15 +860,40 @@ function ArcShape({ radius, startAngle, endAngle, stroke, strokeWidth }: {
 
 function DimensionLabel({ el, scale, stageScale }: { el: GeometryElement; scale: number; stageScale: number }) {
   const fontSize = Math.max(8, Math.min(14, 11 / stageScale));
+  const smallFont = Math.max(7, Math.min(11, 9 / stageScale));
+
   if (el.type === 'wall' && el.length) {
     const mx = ((el.x1! + el.x2!) / 2) * scale;
     const my = ((el.y1! + el.y2!) / 2) * scale;
-    return <Text x={mx - 20} y={my - 14} text={`${el.length}м`} fontSize={fontSize} fill="#64748b" />;
+    const dx = (el.x2! - el.x1!) * scale, dy = (el.y2! - el.y1!) * scale;
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    const labelW = 38 / stageScale, labelH = 14 / stageScale;
+    return (
+      <Group x={mx} y={my} rotation={angle}>
+        <Rect x={-labelW / 2} y={-labelH - 4 / stageScale} width={labelW} height={labelH}
+          fill="white" stroke="#cbd5e1" strokeWidth={0.5 / stageScale} cornerRadius={2 / stageScale} opacity={0.85} />
+        <Text x={-labelW / 2} y={-labelH - 3 / stageScale} width={labelW} height={labelH}
+          text={`${el.length}м`} fontSize={fontSize} fill="#475569" align="center" />
+      </Group>
+    );
   }
-  if ((el.type === 'floor' || el.type === 'foundation') && el.width && el.depth) {
+
+  if ((el.type === 'floor' || el.type === 'foundation' || el.type === 'roof') && el.width && el.depth) {
+    const area = (el.width * el.depth).toFixed(1);
     const cx = (el.x! + el.width / 2) * scale;
     const cy = (el.y! + el.depth / 2) * scale;
-    return <Text x={cx - 30} y={cy - 8} text={`${el.width}×${el.depth}м`} fontSize={fontSize} fill="#475569" align="center" />;
+    const labelW = 52 / stageScale, labelH = 26 / stageScale;
+    const color = el.type === 'floor' ? '#3b82f6' : el.type === 'roof' ? '#f59e0b' : '#10b981';
+    return (
+      <Group x={cx} y={cy}>
+        <Rect x={-labelW / 2} y={-labelH / 2} width={labelW} height={labelH}
+          fill={color} cornerRadius={4 / stageScale} opacity={0.85} />
+        <Text x={-labelW / 2} y={-labelH / 2 + 1 / stageScale} width={labelW}
+          text={`${area} м²`} fontSize={fontSize} fill="white" align="center" fontStyle="bold" />
+        <Text x={-labelW / 2} y={-labelH / 2 + labelH / 2 + 1 / stageScale} width={labelW}
+          text={`${el.width}×${el.depth}м`} fontSize={smallFont} fill="rgba(255,255,255,0.8)" align="center" />
+      </Group>
+    );
   }
   return null;
 }
