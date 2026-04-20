@@ -8,8 +8,8 @@ const router = Router();
 // POST /api/auth/register
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
   const { email, password, name, organizationName } = req.body;
-  if (!email || !password || !name || !organizationName) {
-    res.status(400).json({ error: 'All fields required' });
+  if (!email || !password || !name) {
+    res.status(400).json({ error: 'Email, password and name are required' });
     return;
   }
   try {
@@ -19,7 +19,8 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       return;
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    const org = await prisma.organization.create({ data: { name: organizationName } });
+    const orgName = (organizationName || '').trim() || `${name}'s workspace`;
+    const org = await prisma.organization.create({ data: { name: orgName } });
     const user = await prisma.user.create({
       data: { email, passwordHash, name, role: 'admin', organizationId: org.id },
     });

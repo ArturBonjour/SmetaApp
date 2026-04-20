@@ -145,9 +145,11 @@ export default function LoginPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Компания</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Компания <span className="text-gray-400 font-normal">(необязательно)</span>
+                    </label>
                     <input
-                      type="text" required value={form.organizationName}
+                      type="text" value={form.organizationName}
                       onChange={(e) => setForm({ ...form, organizationName: e.target.value })}
                       className={inputClass} placeholder="ООО Строй+"
                     />

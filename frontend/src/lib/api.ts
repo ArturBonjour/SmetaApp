@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '../store/auth';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
@@ -17,9 +18,9 @@ api.interceptors.response.use(
   (r) => r,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('smeta_token');
-      localStorage.removeItem('smeta_user');
-      window.location.href = '/login';
+      // Use the Zustand store logout so React re-renders and PrivateRoute
+      // handles the redirect via React Router (no hard page reload / no loop).
+      useAuthStore.getState().logout();
     }
     return Promise.reject(error);
   }

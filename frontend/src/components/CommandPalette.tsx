@@ -39,21 +39,22 @@ export default function CommandPalette({ open, onClose, onNewProject }: CommandP
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
-  const { logout } = useAuthStore();
+  const { logout, isAuthenticated } = useAuthStore();
   const { dark, toggle } = useThemeStore();
 
   // Load recent projects when palette opens
   useEffect(() => {
-    if (open) {
+    if (open && isAuthenticated) {
       setQuery('');
       setSelectedIdx(0);
       api.get('/projects?limit=8').then((r) => setProjects(r.data)).catch(() => {});
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [open]);
+  }, [open, isAuthenticated]);
 
   // Debounced search
   const doSearch = useCallback((q: string) => {
+    if (!isAuthenticated) return;
     if (!q.trim()) {
       api.get('/projects?limit=8').then((r) => setProjects(r.data)).catch(() => {});
       setSearching(false);
@@ -71,11 +72,11 @@ export default function CommandPalette({ open, onClose, onNewProject }: CommandP
         setSearching(false);
       }
     }, 250);
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    doSearch(query);
-  }, [query, doSearch]);
+    if (open) doSearch(query);
+  }, [query, doSearch, open]);
 
   const staticCommands: Command[] = [
     {
