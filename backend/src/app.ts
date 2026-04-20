@@ -17,7 +17,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: [FRONTEND_URL, 'http://localhost:5173', 'http://localhost:4173'],
+  origin: [FRONTEND_URL, 'http://localhost', 'http://localhost:5173', 'http://localhost:4173', 'http://localhost:80'],
   credentials: true,
 }));
 app.use(morgan('dev'));
