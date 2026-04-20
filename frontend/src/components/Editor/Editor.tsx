@@ -2,9 +2,11 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Group, Text } from 'react-konva';
 import Konva from 'konva';
 import { useEditorStore } from '../../store/editor';
+import { useThemeStore } from '../../store/theme';
 import type { GeometryElement } from '../../types';
 import { v4 as uuid } from 'uuid';
 import ContextMenu from './ContextMenu';
+import { CanvasRuler, RulerCorner, RULER_SIZE } from './CanvasRuler';
 
 const ELEMENT_COLORS: Record<string, string> = {
   wall:       '#94a3b8',
@@ -48,6 +50,7 @@ function toWorld(x: number, y: number, offset: { x: number; y: number }, stageSc
 export default function Editor() {
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { dark: isDark } = useThemeStore();
 
   const [drawing, setDrawing] = useState<DrawingState>({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
@@ -388,10 +391,28 @@ export default function Editor() {
 
   return (
     <div ref={containerRef} className="w-full h-full bg-slate-50 dark:bg-[#0e1420] relative overflow-hidden select-none">
+      {/* Canvas rulers */}
+      <CanvasRuler
+        direction="h"
+        stageOffset={stageOffset}
+        stageScale={stageScale}
+        worldScale={scale}
+        length={stageSize.width - RULER_SIZE}
+        isDark={isDark}
+      />
+      <CanvasRuler
+        direction="v"
+        stageOffset={stageOffset}
+        stageScale={stageScale}
+        worldScale={scale}
+        length={stageSize.height}
+        isDark={isDark}
+      />
+      <RulerCorner isDark={isDark} />
       <Stage
         ref={stageRef}
-        width={stageSize.width}
-        height={stageSize.height}
+        width={stageSize.width - RULER_SIZE}
+        height={stageSize.height - RULER_SIZE}
         scaleX={stageScale}
         scaleY={stageScale}
         x={stageOffset.x}
@@ -401,7 +422,7 @@ export default function Editor() {
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
         onClick={handleStageClick}
-        style={{ cursor }}
+        style={{ cursor, position: 'absolute', top: RULER_SIZE, left: RULER_SIZE }}
       >
         {/* Grid */}
         <Layer listening={false}>{gridLines}</Layer>

@@ -9,7 +9,31 @@ router.use(authMiddleware);
 const getUser = (req: Request): JwtPayload => (req as any).user;
 const pid = (req: Request): string => req.params.id as string;
 
-// GET /api/projects/templates/list  — MUST be before /:id
+// GET /api/projects/search?q=
+router.get('/search', async (req: Request, res: Response): Promise<void> => {
+  const { organizationId } = getUser(req);
+  const q = String(req.query.q || '').trim();
+  if (!q) { res.json([]); return; }
+  try {
+    const projects = await prisma.project.findMany({
+      where: {
+        organizationId,
+        OR: [
+          { name: { contains: q } },
+          { description: { contains: q } },
+          { tags: { contains: q } },
+        ],
+      },
+      select: { id: true, name: true, description: true, status: true, tags: true, updatedAt: true },
+      take: 10,
+    });
+    res.json(projects);
+  } catch {
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+
 router.get('/templates/list', async (_req: Request, res: Response): Promise<void> => {
   try {
     const templates = await prisma.projectTemplate.findMany({ orderBy: { name: 'asc' } });
@@ -91,7 +115,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   const user = getUser(req);
   const { organizationId } = user;
-  const { name, description, templateId } = req.body;
+  const { name, description, templateId, tags, deadline, budget } = req.body;
   if (!name) {
     res.status(400).json({ error: 'Name required' });
     return;
@@ -107,6 +131,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       data: {
         name,
         description,
+        tags: tags || null,
+        deadline: deadline ? new Date(deadline) : null,
+        budget: budget ? parseFloat(budget) : null,
         organizationId,
         templateId,
         versions: {
@@ -157,13 +184,20 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   const user = getUser(req);
   const { organizationId } = user;
-  const { name, description, status } = req.body;
+  const { name, description, status, tags, deadline, budget } = req.body;
   try {
     const project = await prisma.project.findFirst({ where: { id: pid(req), organizationId } });
     if (!project) { res.status(404).json({ error: 'Not found' }); return; }
     const updated = await prisma.project.update({
       where: { id: pid(req) },
-      data: { ...(name && { name }), ...(description !== undefined && { description }), ...(status && { status }) },
+      data: {
+        ...(name && { name }),
+        ...(description !== undefined && { description }),
+        ...(status && { status }),
+        ...(tags !== undefined && { tags: tags || null }),
+        ...(deadline !== undefined && { deadline: deadline ? new Date(deadline) : null }),
+        ...(budget !== undefined && { budget: budget !== null ? parseFloat(budget) : null }),
+      },
     });
     if (status && status !== project.status) {
       await logActivity({ organizationId, userId: user.userId, userName: user.name, action: 'project.status', entityType: 'project', entityId: project.id, entityName: project.name, metadata: { from: project.status, to: status } });

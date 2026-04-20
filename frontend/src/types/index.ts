@@ -10,6 +10,9 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  tags?: string;       // comma-separated e.g. "баня,жилой"
+  deadline?: string;   // ISO date
+  budget?: number;     // client budget in RUB
   status: 'draft' | 'active' | 'completed' | 'archived';
   organizationId: string;
   templateId?: string;
@@ -19,6 +22,7 @@ export interface Project {
   updatedAt: string;
   createdAt: string;
   _count?: { versions: number };
+  estimationTotal?: number;
 }
 
 export interface ProjectVersion {

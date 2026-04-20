@@ -13,7 +13,7 @@ const SHORTCUTS = [
     items: [
       { keys: ['V'], desc: 'Выбор' },
       { keys: ['W'], desc: 'Рисовать стену' },
-      { keys: ['F'], desc: 'Рисовать пол' },
+      { keys: ['F'], desc: 'По размеру / Пол' },
       { keys: ['R'], desc: 'Рисовать кровлю' },
       { keys: ['N'], desc: 'Рисовать фундамент' },
       { keys: ['I'], desc: 'Добавить окно' },
@@ -26,8 +26,12 @@ const SHORTCUTS = [
       { keys: ['Ctrl', 'Z'], desc: 'Отменить' },
       { keys: ['Ctrl', 'Y'], desc: 'Повторить' },
       { keys: ['Ctrl', 'S'], desc: 'Сохранить' },
+      { keys: ['Ctrl', 'C'], desc: 'Копировать элемент' },
+      { keys: ['Ctrl', 'V'], desc: 'Вставить элемент' },
+      { keys: ['Ctrl', 'D'], desc: 'Дублировать' },
       { keys: ['Del'], desc: 'Удалить элемент' },
       { keys: ['Esc'], desc: 'Отмена / Снять выделение' },
+      { keys: ['F2'], desc: 'Переименовать' },
     ],
   },
   {
@@ -35,15 +39,19 @@ const SHORTCUTS = [
     items: [
       { keys: ['Scroll'], desc: 'Масштаб' },
       { keys: ['Space', '+', 'Drag'], desc: 'Перемещение' },
+      { keys: ['Shift'], desc: 'Снэп угла (45°/90°)' },
       { keys: ['+'], desc: 'Приблизить' },
       { keys: ['-'], desc: 'Отдалить' },
       { keys: ['0'], desc: 'Сбросить вид' },
+      { keys: ['F'], desc: 'Вписать всё в экран' },
     ],
   },
   {
     group: 'Интерфейс',
     items: [
       { keys: ['⌘', 'K'], desc: 'Командная палитра' },
+      { keys: ['G'], desc: 'Привязка к сетке' },
+      { keys: ['Alt', '3'], desc: '3D-вид' },
       { keys: ['?'], desc: 'Горячие клавиши' },
     ],
   },

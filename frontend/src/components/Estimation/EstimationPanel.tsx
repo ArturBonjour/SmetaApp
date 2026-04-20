@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import type { Estimation } from '../../types';
-import { FileSpreadsheet, FileText, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileSpreadsheet, FileText, TrendingUp, ChevronDown, ChevronUp, MessageSquare, Check } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Props {
@@ -27,6 +27,8 @@ export default function EstimationPanel({ projectId, refreshKey }: Props) {
   const [loading, setLoading] = useState(true);
   const [discount, setDiscount] = useState(0);
   const [markup, setMarkup] = useState(0);
+  const [notes, setNotes] = useState('');
+  const [notesSaved, setNotesSaved] = useState(false);
   const [showChart, setShowChart] = useState(true);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
 
@@ -42,6 +44,7 @@ export default function EstimationPanel({ projectId, refreshKey }: Props) {
       setEstimation(data);
       setDiscount(data?.discount || 0);
       setMarkup(data?.markup || 0);
+      setNotes(data?.notes || '');
     } catch {
     } finally {
       setLoading(false);
@@ -52,6 +55,14 @@ export default function EstimationPanel({ projectId, refreshKey }: Props) {
     try {
       const { data } = await api.put(`/estimation/${projectId}/adjust`, { discount, markup });
       setEstimation(data);
+    } catch {}
+  };
+
+  const saveNotes = async () => {
+    try {
+      await api.put(`/estimation/${projectId}/adjust`, { notes });
+      setNotesSaved(true);
+      setTimeout(() => setNotesSaved(false), 2000);
     } catch {}
   };
 
@@ -270,6 +281,33 @@ export default function EstimationPanel({ projectId, refreshKey }: Props) {
             })}
           </div>
         )}
+        {/* Notes */}
+        <div className="px-4 py-3 border-t border-[var(--border)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-[var(--text-3)] flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5" />
+              Примечания к смете
+            </span>
+            <button
+              onClick={saveNotes}
+              className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg transition-all ${
+                notesSaved
+                  ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30'
+                  : 'text-[var(--text-3)] hover:bg-[var(--bg-input)]'
+              }`}
+            >
+              {notesSaved ? <><Check className="w-3 h-3" />Сохранено</> : 'Сохранить'}
+            </button>
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={saveNotes}
+            placeholder="Добавьте примечания, условия, специфику объекта..."
+            rows={3}
+            className="w-full px-2.5 py-2 text-xs bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-1)] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none placeholder:text-[var(--text-3)]"
+          />
+        </div>
       </div>
     </div>
   );
