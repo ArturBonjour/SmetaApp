@@ -63,7 +63,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const projects = await prisma.project.findMany({
       where: { organizationId },
       include: {
-        currentVersion: { select: { id: true, version: true, label: true, createdAt: true } },
+        currentVersion: { select: { id: true, version: true, label: true, createdAt: true, geometryJson: true } },
         _count: { select: { versions: true } },
       },
       orderBy: { updatedAt: 'desc' },

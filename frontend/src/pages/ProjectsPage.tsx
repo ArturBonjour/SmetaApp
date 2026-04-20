@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/api';
 import type { Project, ProjectTemplate } from '../types';
 import toast from 'react-hot-toast';
-import { Plus, Building2, Clock, Trash2, ChevronRight, Search, Copy, TrendingUp, FolderOpen, CheckCircle, Archive } from 'lucide-react';
+import { Plus, Building2, Clock, Trash2, Search, Copy, TrendingUp, FolderOpen, CheckCircle, Archive, ChevronRight } from 'lucide-react';
 import Navbar from '../components/Layout/Navbar';
 import ActivityFeed from '../components/ActivityFeed';
 
@@ -16,6 +16,47 @@ interface Stats {
   total: number;
   totalAmount: number;
   byStatus: { draft: number; active: number; completed: number; archived: number };
+}
+
+// Mini SVG floor plan thumbnail
+function FloorPlanThumb({ geometryJson }: { geometryJson?: string }) {
+  if (!geometryJson) return null;
+  let geo: any;
+  try { geo = JSON.parse(geometryJson); } catch { return null; }
+  const els: any[] = geo.elements || [];
+  if (els.length === 0) return null;
+
+  const W = 80, H = 56, PAD = 4;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const el of els) {
+    if (el.type === 'wall') {
+      minX = Math.min(minX, el.x1, el.x2); minY = Math.min(minY, el.y1, el.y2);
+      maxX = Math.max(maxX, el.x1, el.x2); maxY = Math.max(maxY, el.y1, el.y2);
+    } else {
+      minX = Math.min(minX, el.x ?? 0); minY = Math.min(minY, el.y ?? 0);
+      maxX = Math.max(maxX, (el.x ?? 0) + (el.width ?? 1));
+      maxY = Math.max(maxY, (el.y ?? 0) + (el.depth ?? 1));
+    }
+  }
+  if (!isFinite(minX)) return null;
+  const bw = maxX - minX || 1, bh = maxY - minY || 1;
+  const sc = Math.min((W - PAD * 2) / bw, (H - PAD * 2) / bh);
+  const tx = (x: number) => PAD + (x - minX) * sc;
+  const ty = (y: number) => PAD + (y - minY) * sc;
+  const COLORS: Record<string, string> = { wall: '#334155', floor: '#bfdbfe', roof: '#fef3c7', window: '#bae6fd', door: '#fecaca', foundation: '#d1fae5' };
+
+  return (
+    <svg width={W} height={H} className="rounded overflow-hidden bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
+      {els.map((el: any, i: number) => {
+        const c = COLORS[el.type] || '#e2e8f0';
+        if (el.type === 'wall') {
+          return <line key={i} x1={tx(el.x1)} y1={ty(el.y1)} x2={tx(el.x2)} y2={ty(el.y2)} stroke={c} strokeWidth={1.5} strokeLinecap="round" />;
+        }
+        const x = el.x ?? 0, y = el.y ?? 0, w = el.width ?? 1, h = el.depth ?? 1;
+        return <rect key={i} x={tx(x)} y={ty(y)} width={w * sc} height={h * sc} fill={c} fillOpacity={0.7} stroke={c} strokeWidth={0.5} rx={1} />;
+      })}
+    </svg>
+  );
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
@@ -369,7 +410,9 @@ export default function ProjectsPage({ onCommandPalette }: Props) {
                       onMouseEnter={(e) => (e.currentTarget.style.boxShadow = 'var(--shadow-card-hover)')}
                       onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'var(--shadow-card)')}
                     >
-                      <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-start justify-between mb-3 gap-3">
+                        {/* Thumbnail */}
+                        <FloorPlanThumb geometryJson={project.currentVersion?.geometryJson} />
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-[var(--text-1)] truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                             {project.name}

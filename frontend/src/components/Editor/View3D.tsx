@@ -166,9 +166,9 @@ function DoorMesh({ el }: { el: GeometryElement }) {
 // --- Ground plane ---
 function Ground({ size }: { size: number }) {
   return (
-    <mesh position={[size / 2, -0.01, size / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[size * 3, size * 3]} />
-      <meshStandardMaterial color="#e2e8f0" roughness={1} />
+    <mesh position={[size / 2, -0.01, size / 2]} receiveShadow>
+      <boxGeometry args={[size * 4, 0.1, size * 4]} />
+      <meshStandardMaterial color="#c8d6b0" roughness={0.95} metalness={0} />
     </mesh>
   );
 }
@@ -179,11 +179,15 @@ function Scene({ elements, buildingSize }: { elements: GeometryElement[]; buildi
     <>
       <AutoRotateCamera />
 
+      {/* Sky / Fog */}
+      <color attach="background" args={['#b8d4e8']} />
+      <fog attach="fog" args={['#b8d4e8', buildingSize * 4, buildingSize * 20]} />
+
       {/* Lighting */}
-      <ambientLight intensity={0.5} />
+      <ambientLight intensity={0.7} />
       <directionalLight
         position={[buildingSize * 2, buildingSize * 3, buildingSize * 2]}
-        intensity={1.4}
+        intensity={1.6}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-near={0.1}
@@ -193,7 +197,8 @@ function Scene({ elements, buildingSize }: { elements: GeometryElement[]; buildi
         shadow-camera-top={buildingSize * 2}
         shadow-camera-bottom={-buildingSize * 2}
       />
-      <pointLight position={[-buildingSize, buildingSize * 2, -buildingSize]} intensity={0.4} color="#a5b4fc" />
+      <hemisphereLight args={['#b8d4e8', '#c8d6b0', 0.4]} />
+      <pointLight position={[-buildingSize, buildingSize * 2, -buildingSize]} intensity={0.3} color="#a5b4fc" />
 
       {/* Environment for reflections */}
       <Environment preset="city" />
@@ -204,13 +209,13 @@ function Scene({ elements, buildingSize }: { elements: GeometryElement[]; buildi
       {/* Grid */}
       <Grid
         args={[buildingSize * 4, buildingSize * 4]}
-        position={[buildingSize / 2, 0, buildingSize / 2]}
+        position={[buildingSize / 2, 0.06, buildingSize / 2]}
         cellSize={1}
         cellThickness={0.4}
-        cellColor="#94a3b8"
+        cellColor="#8aad6e"
         sectionSize={5}
         sectionThickness={1}
-        sectionColor="#64748b"
+        sectionColor="#6a9a50"
         fadeDistance={60}
         fadeStrength={1}
         infiniteGrid
@@ -258,10 +263,10 @@ export default function View3D({ elements, buildingWidth = 10, buildingDepth = 8
   const camDist = buildingSize * 1.5 + 6;
 
   return (
-    <div className="w-full h-full bg-gradient-to-b from-[#0f172a] to-[#1e293b] relative">
+    <div className="w-full h-full bg-[#b8d4e8] relative">
       {/* Legend */}
-      <div className="absolute top-3 left-3 z-10 bg-black/50 backdrop-blur-sm rounded-xl p-2.5 text-xs text-white/80 space-y-1">
-        <div className="font-semibold text-white mb-1.5">Условные обозначения</div>
+      <div className="absolute top-3 left-3 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-xl p-2.5 text-xs text-slate-700 dark:text-white/80 space-y-1 shadow-lg border border-white/50">
+        <div className="font-semibold text-slate-900 dark:text-white mb-1.5">Условные обозначения</div>
         {[
           { color: '#334155', label: 'Стены' },
           { color: '#bfdbfe', label: 'Пол' },
@@ -271,15 +276,15 @@ export default function View3D({ elements, buildingWidth = 10, buildingDepth = 8
           { color: '#fca5a5', label: 'Двери' },
         ].map((item) => (
           <div key={item.label} className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ background: item.color }} />
+            <div className="w-3 h-3 rounded border border-black/10" style={{ background: item.color }} />
             <span>{item.label}</span>
           </div>
         ))}
       </div>
 
       {/* Controls hint */}
-      <div className="absolute top-3 right-3 z-10 bg-black/50 backdrop-blur-sm rounded-xl p-2.5 text-xs text-white/70 space-y-0.5">
-        <div className="text-white/90 font-semibold mb-1">Управление</div>
+      <div className="absolute top-3 right-3 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-xl p-2.5 text-xs text-slate-600 dark:text-white/70 space-y-0.5 shadow-lg border border-white/50">
+        <div className="text-slate-900 dark:text-white/90 font-semibold mb-1">Управление</div>
         <div>🖱 ЛКМ — вращение</div>
         <div>🖱 ПКМ — перемещение</div>
         <div>🖱 Колесо — масштаб</div>
@@ -287,10 +292,10 @@ export default function View3D({ elements, buildingWidth = 10, buildingDepth = 8
 
       {elements.length === 0 ? (
         <div className="absolute inset-0 flex items-center justify-center text-center">
-          <div className="text-white/50">
+          <div className="text-slate-500">
             <div className="text-5xl mb-4">🏗</div>
-            <div className="text-lg font-medium mb-1 text-white/70">3D вид пуст</div>
-            <div className="text-sm">Добавьте элементы в 2D редакторе,<br />чтобы увидеть здание здесь</div>
+            <div className="text-lg font-medium mb-1 text-slate-700">3D вид пуст</div>
+            <div className="text-sm text-slate-500">Добавьте элементы в 2D редакторе,<br />чтобы увидеть здание здесь</div>
           </div>
         </div>
       ) : (

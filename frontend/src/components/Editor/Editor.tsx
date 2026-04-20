@@ -315,26 +315,66 @@ export default function Editor() {
 
           {/* Drawing preview */}
           {drawing.active && tool === 'wall' && (
-            <Line
-              points={[drawing.startX * scale, drawing.startY * scale, drawing.currentX * scale, drawing.currentY * scale]}
-              stroke="#3b82f6"
-              strokeWidth={6 / stageScale}
-              lineCap="round"
-              dash={[10 / stageScale, 5 / stageScale]}
-            />
+            <>
+              <Line
+                points={[drawing.startX * scale, drawing.startY * scale, drawing.currentX * scale, drawing.currentY * scale]}
+                stroke="#3b82f6"
+                strokeWidth={6 / stageScale}
+                lineCap="round"
+                dash={[10 / stageScale, 5 / stageScale]}
+              />
+              {/* Live dimension label */}
+              {(() => {
+                const dx = drawing.currentX - drawing.startX;
+                const dy = drawing.currentY - drawing.startY;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                if (len < 0.1) return null;
+                const mx = ((drawing.startX + drawing.currentX) / 2) * scale;
+                const my = ((drawing.startY + drawing.currentY) / 2) * scale;
+                const fontSize = Math.max(8, Math.min(14, 13 / stageScale));
+                return (
+                  <Group x={mx} y={my - 18 / stageScale}>
+                    <Rect x={-28 / stageScale} y={-8 / stageScale} width={56 / stageScale} height={16 / stageScale}
+                      fill="#3b82f6" cornerRadius={4 / stageScale} />
+                    <Text text={`${len.toFixed(2)}м`} x={-28 / stageScale} y={-7 / stageScale}
+                      width={56 / stageScale} align="center" fontSize={fontSize} fill="white" fontStyle="bold" />
+                  </Group>
+                );
+              })()}
+            </>
           )}
           {drawing.active && (tool === 'floor' || tool === 'roof' || tool === 'foundation') && (
-            <Rect
-              x={Math.min(drawing.startX, drawing.currentX) * scale}
-              y={Math.min(drawing.startY, drawing.currentY) * scale}
-              width={Math.abs(drawing.currentX - drawing.startX) * scale}
-              height={Math.abs(drawing.currentY - drawing.startY) * scale}
-              fill={ELEMENT_COLORS[tool]}
-              stroke="#3b82f6"
-              strokeWidth={2 / stageScale}
-              dash={[8 / stageScale, 4 / stageScale]}
-              opacity={0.6}
-            />
+            <>
+              <Rect
+                x={Math.min(drawing.startX, drawing.currentX) * scale}
+                y={Math.min(drawing.startY, drawing.currentY) * scale}
+                width={Math.abs(drawing.currentX - drawing.startX) * scale}
+                height={Math.abs(drawing.currentY - drawing.startY) * scale}
+                fill={ELEMENT_COLORS[tool]}
+                stroke="#3b82f6"
+                strokeWidth={2 / stageScale}
+                dash={[8 / stageScale, 4 / stageScale]}
+                opacity={0.6}
+              />
+              {/* Live area label */}
+              {(() => {
+                const w = Math.abs(drawing.currentX - drawing.startX);
+                const h = Math.abs(drawing.currentY - drawing.startY);
+                if (w < 0.5 || h < 0.5) return null;
+                const cx = ((drawing.startX + drawing.currentX) / 2) * scale;
+                const cy = ((drawing.startY + drawing.currentY) / 2) * scale;
+                const label = `${w.toFixed(1)}×${h.toFixed(1)} = ${(w * h).toFixed(1)}м²`;
+                const fontSize = Math.max(8, Math.min(12, 11 / stageScale));
+                return (
+                  <Group x={cx} y={cy}>
+                    <Rect x={-40 / stageScale} y={-10 / stageScale} width={80 / stageScale} height={20 / stageScale}
+                      fill="rgba(59,130,246,0.85)" cornerRadius={4 / stageScale} />
+                    <Text text={label} x={-40 / stageScale} y={-9 / stageScale}
+                      width={80 / stageScale} align="center" fontSize={fontSize} fill="white" fontStyle="bold" />
+                  </Group>
+                );
+              })()}
+            </>
           )}
         </Layer>
 
@@ -360,6 +400,29 @@ export default function Editor() {
           {zoomPercent}% · 1☐=1м
         </div>
       </div>
+
+      {/* Quick stats bar – bottom left */}
+      {geometry.elements.length > 0 && (
+        <div className="absolute bottom-4 left-4 flex items-center gap-2 flex-wrap">
+          {(() => {
+            const walls = geometry.elements.filter((e) => e.type === 'wall');
+            const totalWallLen = walls.reduce((s, e) => s + (e.length ?? 0), 0);
+            const floors = geometry.elements.filter((e) => e.type === 'floor');
+            const totalArea = floors.reduce((s, e) => s + (e.width ?? 0) * (e.depth ?? 0), 0);
+            const roofs = geometry.elements.filter((e) => e.type === 'roof');
+            const stats = [
+              walls.length > 0 && `🧱 ${walls.length} ст · ${totalWallLen.toFixed(1)}м`,
+              floors.length > 0 && `📐 ${totalArea.toFixed(1)}м² пол`,
+              roofs.length > 0 && `🏠 кровля`,
+            ].filter(Boolean);
+            return stats.map((s, i) => (
+              <div key={i} className="bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-lg px-2.5 py-1 text-xs text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
+                {s}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
 
       {/* Context Menu */}
       {ctxMenu && (
@@ -427,7 +490,8 @@ function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdat
       const newY1 = snapVal((el.y1 ?? 0) * scale + dy) / scale;
       const newX2 = snapVal((el.x2 ?? 0) * scale + dx) / scale;
       const newY2 = snapVal((el.y2 ?? 0) * scale + dy) / scale;
-      onUpdate({ x1: newX1, y1: newY1, x2: newX2, y2: newY2 });
+      const newLen = parseFloat(Math.sqrt((newX2 - newX1) ** 2 + (newY2 - newY1) ** 2).toFixed(2));
+      onUpdate({ x1: newX1, y1: newY1, x2: newX2, y2: newY2, length: newLen });
       e.target.position({ x: newX1 * scale, y: newY1 * scale });
     } else {
       const nx = snapVal(e.target.x()) / scale;
@@ -443,21 +507,54 @@ function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdat
     const x2 = (el.x2 ?? 0) * scale;
     const y2 = (el.y2 ?? 0) * scale;
     return (
-      <Group draggable onDragEnd={handleDragEnd} x={x1} y={y1} onClick={onSelect} onContextMenu={onContextMenu}>
-        <Line
-          points={[0, 0, x2 - x1, y2 - y1]}
-          stroke={selected ? '#3b82f6' : stroke}
-          strokeWidth={strokeWidth}
-          lineCap="round"
-          hitStrokeWidth={20}
-        />
+      <>
+        <Group draggable onDragEnd={handleDragEnd} x={x1} y={y1} onClick={onSelect} onContextMenu={onContextMenu}>
+          <Line
+            points={[0, 0, x2 - x1, y2 - y1]}
+            stroke={selected ? '#3b82f6' : stroke}
+            strokeWidth={strokeWidth}
+            lineCap="round"
+            hitStrokeWidth={20}
+          />
+        </Group>
+        {/* Endpoint drag handles – rendered as Layer siblings so they don't inherit Group position */}
         {selected && (
           <>
-            <Circle x={0} y={0} radius={5} fill="#3b82f6" stroke="white" strokeWidth={2} />
-            <Circle x={x2 - x1} y={y2 - y1} radius={5} fill="#3b82f6" stroke="white" strokeWidth={2} />
+            <Circle
+              x={x1} y={y1} radius={7}
+              fill="#3b82f6" stroke="white" strokeWidth={2.5}
+              draggable
+              onDragMove={(e) => {
+                const nx = snapVal(e.target.x()) / scale;
+                const ny = snapVal(e.target.y()) / scale;
+                const newLen = parseFloat(Math.sqrt((nx - (el.x2 ?? 0)) ** 2 + (ny - (el.y2 ?? 0)) ** 2).toFixed(2));
+                onUpdate({ x1: nx, y1: ny, length: newLen });
+              }}
+              onDragEnd={(e) => {
+                const nx = snapVal(e.target.x()) / scale;
+                const ny = snapVal(e.target.y()) / scale;
+                e.target.position({ x: nx * scale, y: ny * scale });
+              }}
+            />
+            <Circle
+              x={x2} y={y2} radius={7}
+              fill="#3b82f6" stroke="white" strokeWidth={2.5}
+              draggable
+              onDragMove={(e) => {
+                const nx = snapVal(e.target.x()) / scale;
+                const ny = snapVal(e.target.y()) / scale;
+                const newLen = parseFloat(Math.sqrt(((el.x1 ?? 0) - nx) ** 2 + ((el.y1 ?? 0) - ny) ** 2).toFixed(2));
+                onUpdate({ x2: nx, y2: ny, length: newLen });
+              }}
+              onDragEnd={(e) => {
+                const nx = snapVal(e.target.x()) / scale;
+                const ny = snapVal(e.target.y()) / scale;
+                e.target.position({ x: nx * scale, y: ny * scale });
+              }}
+            />
           </>
         )}
-      </Group>
+      </>
     );
   }
 
