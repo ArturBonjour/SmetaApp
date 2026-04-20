@@ -117,27 +117,52 @@ export default function PropertiesPanel({ projectId: _projectId }: Props) {
 
         {/* Wall specific */}
         {selected.type === 'wall' && (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={labelClass}>Длина (м)</label>
-              <input
-                type="number"
-                value={selected.length || 0}
-                readOnly
-                className="w-full px-2.5 py-2 text-sm bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-3)] rounded-lg cursor-not-allowed"
-              />
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Длина (м)</label>
+                <input
+                  type="number"
+                  value={selected.length || 0}
+                  readOnly
+                  className="w-full px-2.5 py-2 text-sm bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-3)] rounded-lg cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Высота (м)</label>
+                <input
+                  type="number"
+                  value={selected.height || 2.5}
+                  onChange={(e) => handleChange('height', e.target.value)}
+                  className={inputClass}
+                  min="1" max="10" step="0.1"
+                />
+              </div>
             </div>
             <div>
-              <label className={labelClass}>Высота (м)</label>
-              <input
-                type="number"
-                value={selected.height || 2.5}
-                onChange={(e) => handleChange('height', e.target.value)}
-                className={inputClass}
-                min="1" max="10" step="0.1"
-              />
+              <label className={labelClass}>Толщина (м)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="0.1" max="0.5" step="0.05"
+                  value={selected.thickness ?? 0.2}
+                  onChange={(e) => handleChange('thickness', e.target.value)}
+                  className="flex-1 accent-blue-600"
+                />
+                <span className="text-xs text-[var(--text-2)] font-mono w-10 text-right">
+                  {(selected.thickness ?? 0.2).toFixed(2)}м
+                </span>
+              </div>
             </div>
-          </div>
+            {selected.length && selected.height && (
+              <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg px-3 py-2.5 text-sm flex items-center justify-between">
+                <span className="text-[var(--text-3)]">Площадь ст.</span>
+                <span className="font-bold text-blue-700 dark:text-blue-300">
+                  {(selected.length * (selected.height ?? 2.5)).toFixed(1)} м²
+                </span>
+              </div>
+            )}
+          </>
         )}
 
         {/* Area elements */}

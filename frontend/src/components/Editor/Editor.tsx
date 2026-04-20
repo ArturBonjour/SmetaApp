@@ -7,7 +7,7 @@ import { v4 as uuid } from 'uuid';
 import ContextMenu from './ContextMenu';
 
 const ELEMENT_COLORS: Record<string, string> = {
-  wall:       '#334155',
+  wall:       '#94a3b8',
   floor:      '#dbeafe',
   roof:       '#fef3c7',
   window:     '#bae6fd',
@@ -17,7 +17,7 @@ const ELEMENT_COLORS: Record<string, string> = {
 };
 
 const ELEMENT_STROKE: Record<string, string> = {
-  wall:       '#1e293b',
+  wall:       '#475569',
   floor:      '#3b82f6',
   roof:       '#f59e0b',
   window:     '#0ea5e9',
@@ -57,6 +57,8 @@ export default function Editor() {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [isPanningActive, setIsPanningActive] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; elementId: string } | null>(null);
+  const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null);
+  const shiftRef = useRef(false);
   const { geometry, selectedId, tool, snapToGrid: snap, scale,
     setSelectedId, addElement, updateElement, removeElement, duplicateElement,
   } = useEditorStore();
@@ -77,6 +79,7 @@ export default function Editor() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') { shiftRef.current = true; return; }
       if (['INPUT', 'TEXTAREA'].includes((e.target as Element)?.tagName)) return;
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
         removeElement(selectedId);
@@ -84,6 +87,7 @@ export default function Editor() {
       if (e.key === 'Escape') {
         setSelectedId(null);
         setDrawing((d) => ({ ...d, active: false }));
+        setSnapIndicator(null);
       }
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault();
@@ -101,6 +105,7 @@ export default function Editor() {
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') { shiftRef.current = false; return; }
       if (e.code === 'Space') setIsPanning(false);
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -150,6 +155,23 @@ export default function Editor() {
     return { x: Math.round(x / SNAP_STEP) * SNAP_STEP, y: Math.round(y / SNAP_STEP) * SNAP_STEP };
   }, [getWorldPos, snap]);
 
+  // Check if screen pointer is near an existing wall endpoint (returns world coords)
+  const findEndpointSnap = useCallback((screenX: number, screenY: number, excludeId?: string) => {
+    const SNAP_PX = 18; // screen pixels
+    for (const el of geometry.elements) {
+      if (el.type !== 'wall') continue;
+      if (el.id === excludeId) continue;
+      for (const [wx, wy] of [[el.x1!, el.y1!], [el.x2!, el.y2!]] as [number, number][]) {
+        const sx = wx * scale * stageScale + stageOffset.x;
+        const sy = wy * scale * stageScale + stageOffset.y;
+        if (Math.hypot(screenX - sx, screenY - sy) < SNAP_PX) {
+          return { x: wx, y: wy };
+        }
+      }
+    }
+    return null;
+  }, [geometry.elements, scale, stageScale, stageOffset]);
+
   const handleStageMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     // Pan with space or middle mouse
     if (isPanning || e.evt.button === 1) {
@@ -162,10 +184,19 @@ export default function Editor() {
       return;
     }
     if (tool === 'select') return;
-    const { x, y } = getSnappedWorldPos();
+    let { x, y } = getSnappedWorldPos();
+    // Endpoint snap takes priority for wall starts
+    if (tool === 'wall') {
+      const stage = stageRef.current;
+      const pointer = stage?.getPointerPosition();
+      if (pointer) {
+        const snap = findEndpointSnap(pointer.x, pointer.y);
+        if (snap) { x = snap.x; y = snap.y; }
+      }
+    }
     setDrawing({ active: true, startX: x, startY: y, currentX: x, currentY: y });
     e.cancelBubble = true;
-  }, [tool, isPanning, stageOffset, getSnappedWorldPos]);
+  }, [tool, isPanning, stageOffset, getSnappedWorldPos, findEndpointSnap]);
 
   const handleStageMouseMove = useCallback(() => {
     if (isPanningActive) {
@@ -176,10 +207,53 @@ export default function Editor() {
       setStageOffset({ x: pointer.x - panStart.x, y: pointer.y - panStart.y });
       return;
     }
-    if (!drawing.active) return;
-    const { x, y } = getSnappedWorldPos();
+
+    // Get raw pointer position for endpoint snap check
+    const stage = stageRef.current;
+    const pointer = stage?.getPointerPosition();
+
+    if (!drawing.active) {
+      // Show snap indicator even when not drawing (hover preview)
+      if (tool === 'wall' && pointer) {
+        setSnapIndicator(findEndpointSnap(pointer.x, pointer.y));
+      } else {
+        setSnapIndicator(null);
+      }
+      return;
+    }
+
+    let { x, y } = getSnappedWorldPos();
+
+    // Angle snapping with Shift key — lock to 0°/45°/90°/135°
+    if (shiftRef.current && tool === 'wall') {
+      const dx = x - drawing.startX;
+      const dy = y - drawing.startY;
+      const len = Math.hypot(dx, dy);
+      if (len > 0.1) {
+        const rawAngle = Math.atan2(dy, dx);
+        const snappedAngle = Math.round(rawAngle / (Math.PI / 4)) * (Math.PI / 4);
+        x = drawing.startX + Math.cos(snappedAngle) * len;
+        y = drawing.startY + Math.sin(snappedAngle) * len;
+        // round to grid
+        x = Math.round(x * 2) / 2;
+        y = Math.round(y * 2) / 2;
+      }
+    }
+
+    // Endpoint snap takes priority
+    if (pointer && tool === 'wall') {
+      const endSnap = findEndpointSnap(pointer.x, pointer.y);
+      if (endSnap) {
+        x = endSnap.x;
+        y = endSnap.y;
+        setSnapIndicator(endSnap);
+      } else {
+        setSnapIndicator(null);
+      }
+    }
+
     setDrawing((d) => ({ ...d, currentX: x, currentY: y }));
-  }, [isPanningActive, panStart, drawing.active, getSnappedWorldPos]);
+  }, [isPanningActive, panStart, drawing.active, drawing.startX, drawing.startY, tool, getSnappedWorldPos, findEndpointSnap]);
 
   const handleStageMouseUp = useCallback(() => {
     if (isPanningActive) {
@@ -189,6 +263,7 @@ export default function Editor() {
     if (!drawing.active) return;
     const { startX, startY, currentX, currentY } = drawing;
     setDrawing((d) => ({ ...d, active: false }));
+    setSnapIndicator(null);
 
     // startX/currentX are in METERS (returned by getSnappedWorldPos)
     const dx = currentX - startX; // meters
@@ -319,10 +394,14 @@ export default function Editor() {
               <Line
                 points={[drawing.startX * scale, drawing.startY * scale, drawing.currentX * scale, drawing.currentY * scale]}
                 stroke="#3b82f6"
-                strokeWidth={6 / stageScale}
+                strokeWidth={12 / stageScale}
                 lineCap="round"
                 dash={[10 / stageScale, 5 / stageScale]}
+                opacity={0.7}
               />
+              {/* Start point indicator */}
+              <Circle x={drawing.startX * scale} y={drawing.startY * scale}
+                radius={5 / stageScale} fill="#3b82f6" />
               {/* Live dimension label */}
               {(() => {
                 const dx = drawing.currentX - drawing.startX;
@@ -331,13 +410,18 @@ export default function Editor() {
                 if (len < 0.1) return null;
                 const mx = ((drawing.startX + drawing.currentX) / 2) * scale;
                 const my = ((drawing.startY + drawing.currentY) / 2) * scale;
+                // angle label
+                const angleDeg = Math.round(Math.atan2(dy, dx) * 180 / Math.PI);
                 const fontSize = Math.max(8, Math.min(14, 13 / stageScale));
+                const labelW = 60 / stageScale;
                 return (
-                  <Group x={mx} y={my - 18 / stageScale}>
-                    <Rect x={-28 / stageScale} y={-8 / stageScale} width={56 / stageScale} height={16 / stageScale}
-                      fill="#3b82f6" cornerRadius={4 / stageScale} />
-                    <Text text={`${len.toFixed(2)}м`} x={-28 / stageScale} y={-7 / stageScale}
-                      width={56 / stageScale} align="center" fontSize={fontSize} fill="white" fontStyle="bold" />
+                  <Group x={mx} y={my - 22 / stageScale}>
+                    <Rect x={-labelW / 2} y={-9 / stageScale} width={labelW} height={18 / stageScale}
+                      fill="#2563eb" cornerRadius={4 / stageScale} />
+                    <Text text={`${len.toFixed(2)}м`} x={-labelW / 2} y={-8 / stageScale}
+                      width={labelW} align="center" fontSize={fontSize} fill="white" fontStyle="bold" />
+                    <Text text={`${angleDeg}°`} x={-labelW / 2} y={8 / stageScale}
+                      width={labelW} align="center" fontSize={Math.max(6, fontSize * 0.85)} fill="#94a3b8" />
                   </Group>
                 );
               })()}
@@ -384,7 +468,36 @@ export default function Editor() {
             <DimensionLabel key={`dim-${el.id}`} el={el} scale={scale} stageScale={stageScale} />
           ))}
         </Layer>
+
+        {/* Snap indicator layer */}
+        <Layer listening={false}>
+          {snapIndicator && (
+            <>
+              <Circle
+                x={snapIndicator.x * scale}
+                y={snapIndicator.y * scale}
+                radius={10 / stageScale}
+                stroke="#f59e0b"
+                strokeWidth={2 / stageScale}
+                fill="rgba(251,191,36,0.2)"
+              />
+              <Circle
+                x={snapIndicator.x * scale}
+                y={snapIndicator.y * scale}
+                radius={3 / stageScale}
+                fill="#f59e0b"
+              />
+            </>
+          )}
+        </Layer>
       </Stage>
+
+      {/* Shift angle hint */}
+      {drawing.active && tool === 'wall' && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-slate-800/90 text-white text-xs px-3 py-1 rounded-full backdrop-blur pointer-events-none">
+          {shiftRef.current ? '🔒 Угол зафиксирован · отпустите Shift' : 'Shift — зафиксировать угол 0°/45°/90°'}
+        </div>
+      )}
 
       {/* Status bar */}
       <div className="absolute bottom-4 right-4 flex items-center gap-2">
@@ -476,7 +589,6 @@ interface ElementRendererProps {
 function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdate, snap, gridSize }: ElementRendererProps) {
   const color = ELEMENT_COLORS[el.type] || '#ccc';
   const stroke = ELEMENT_STROKE[el.type] || '#999';
-  const strokeWidth = selected ? 2.5 : el.type === 'wall' ? 5 : 1.5;
 
   const snapVal = (v: number) => snap ? snapToGrid(v, gridSize) : v;
 
@@ -506,15 +618,31 @@ function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdat
     const y1 = (el.y1 ?? 0) * scale;
     const x2 = (el.x2 ?? 0) * scale;
     const y2 = (el.y2 ?? 0) * scale;
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.01) return null;
+
+    // Perpendicular unit normal
+    const nx = -dy / len, ny = dx / len;
+    const ht = (el.thickness ?? 0.2) * scale / 2; // half-thickness in layer pixels
+
+    // 4 corners (relative to x1,y1)
+    const wallPts = [
+      nx * ht,       ny * ht,
+      dx + nx * ht,  dy + ny * ht,
+      dx - nx * ht,  dy - ny * ht,
+      -nx * ht,      -ny * ht,
+    ];
+
     return (
       <>
         <Group draggable onDragEnd={handleDragEnd} x={x1} y={y1} onClick={onSelect} onContextMenu={onContextMenu}>
           <Line
-            points={[0, 0, x2 - x1, y2 - y1]}
-            stroke={selected ? '#3b82f6' : stroke}
-            strokeWidth={strokeWidth}
-            lineCap="round"
-            hitStrokeWidth={20}
+            points={wallPts}
+            closed
+            fill={selected ? '#dbeafe' : '#c8d4e3'}
+            stroke={selected ? '#3b82f6' : '#475569'}
+            strokeWidth={selected ? 1.5 : 1}
           />
         </Group>
         {/* Endpoint drag handles – rendered as Layer siblings so they don't inherit Group position */}
@@ -525,15 +653,15 @@ function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdat
               fill="#3b82f6" stroke="white" strokeWidth={2.5}
               draggable
               onDragMove={(e) => {
-                const nx = snapVal(e.target.x()) / scale;
-                const ny = snapVal(e.target.y()) / scale;
-                const newLen = parseFloat(Math.sqrt((nx - (el.x2 ?? 0)) ** 2 + (ny - (el.y2 ?? 0)) ** 2).toFixed(2));
-                onUpdate({ x1: nx, y1: ny, length: newLen });
+                const nx2 = snapVal(e.target.x()) / scale;
+                const ny2 = snapVal(e.target.y()) / scale;
+                const newLen = parseFloat(Math.sqrt((nx2 - (el.x2 ?? 0)) ** 2 + (ny2 - (el.y2 ?? 0)) ** 2).toFixed(2));
+                onUpdate({ x1: nx2, y1: ny2, length: newLen });
               }}
               onDragEnd={(e) => {
-                const nx = snapVal(e.target.x()) / scale;
-                const ny = snapVal(e.target.y()) / scale;
-                e.target.position({ x: nx * scale, y: ny * scale });
+                const nx2 = snapVal(e.target.x()) / scale;
+                const ny2 = snapVal(e.target.y()) / scale;
+                e.target.position({ x: nx2 * scale, y: ny2 * scale });
               }}
             />
             <Circle
@@ -541,15 +669,15 @@ function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdat
               fill="#3b82f6" stroke="white" strokeWidth={2.5}
               draggable
               onDragMove={(e) => {
-                const nx = snapVal(e.target.x()) / scale;
-                const ny = snapVal(e.target.y()) / scale;
-                const newLen = parseFloat(Math.sqrt(((el.x1 ?? 0) - nx) ** 2 + ((el.y1 ?? 0) - ny) ** 2).toFixed(2));
-                onUpdate({ x2: nx, y2: ny, length: newLen });
+                const nx2 = snapVal(e.target.x()) / scale;
+                const ny2 = snapVal(e.target.y()) / scale;
+                const newLen = parseFloat(Math.sqrt(((el.x1 ?? 0) - nx2) ** 2 + ((el.y1 ?? 0) - ny2) ** 2).toFixed(2));
+                onUpdate({ x2: nx2, y2: ny2, length: newLen });
               }}
               onDragEnd={(e) => {
-                const nx = snapVal(e.target.x()) / scale;
-                const ny = snapVal(e.target.y()) / scale;
-                e.target.position({ x: nx * scale, y: ny * scale });
+                const nx2 = snapVal(e.target.x()) / scale;
+                const ny2 = snapVal(e.target.y()) / scale;
+                e.target.position({ x: nx2 * scale, y: ny2 * scale });
               }}
             />
           </>
@@ -593,26 +721,83 @@ function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdat
   const rw = (el.width ?? 0) * scale;
   const rh = (el.depth ?? 0) * scale;
 
+  // Corner resize handle helper
+  const makeResizeHandle = (
+    hx: number, hy: number,
+    onMove: (nx: number, ny: number) => void,
+  ) => (
+    <Circle
+      x={hx} y={hy} radius={6}
+      fill="white" stroke="#3b82f6" strokeWidth={2}
+      draggable
+      onDragMove={(e) => {
+        const nx = snapVal(e.target.x()) / scale;
+        const ny = snapVal(e.target.y()) / scale;
+        onMove(nx, ny);
+      }}
+      onDragEnd={(e) => {
+        const nx = snapVal(e.target.x()) / scale;
+        const ny = snapVal(e.target.y()) / scale;
+        e.target.position({ x: nx * scale, y: ny * scale });
+      }}
+    />
+  );
+
   return (
-    <Group draggable x={rx} y={ry} onDragEnd={handleDragEnd} onClick={onSelect} onContextMenu={onContextMenu}>
-      <Rect
-        width={rw} height={rh}
-        fill={color}
-        stroke={selected ? '#3b82f6' : stroke}
-        strokeWidth={selected ? 2 : 1.5}
-        opacity={0.75}
-        cornerRadius={2}
-        dash={el.type === 'roof' ? [8, 4] : undefined}
-      />
-      {el.type === 'roof' && rw > 0 && rh > 0 && (
-        <Line
-          points={[rw / 2, 0, 0, rh / 2, rw / 2, rh, rw, rh / 2, rw / 2, 0]}
-          stroke={stroke}
-          strokeWidth={1}
-          opacity={0.4}
+    <>
+      <Group draggable x={rx} y={ry} onDragEnd={handleDragEnd} onClick={onSelect} onContextMenu={onContextMenu}>
+        <Rect
+          width={rw} height={rh}
+          fill={color}
+          stroke={selected ? '#3b82f6' : stroke}
+          strokeWidth={selected ? 2 : 1.5}
+          opacity={0.75}
+          cornerRadius={2}
+          dash={el.type === 'roof' ? [8, 4] : undefined}
         />
+        {el.type === 'roof' && rw > 0 && rh > 0 && (
+          <Line
+            points={[rw / 2, 0, 0, rh / 2, rw / 2, rh, rw, rh / 2, rw / 2, 0]}
+            stroke={stroke}
+            strokeWidth={1}
+            opacity={0.4}
+          />
+        )}
+      </Group>
+      {/* Corner resize handles */}
+      {selected && (
+        <>
+          {/* SE corner */}
+          {makeResizeHandle(rx + rw, ry + rh, (nx, ny) => {
+            const newW = Math.max(0.5, nx - (el.x ?? 0));
+            const newD = Math.max(0.5, ny - (el.y ?? 0));
+            onUpdate({ width: newW, depth: newD });
+          })}
+          {/* SW corner */}
+          {makeResizeHandle(rx, ry + rh, (nx, ny) => {
+            const origRight = (el.x ?? 0) + (el.width ?? 0);
+            const newW = Math.max(0.5, origRight - nx);
+            const newD = Math.max(0.5, ny - (el.y ?? 0));
+            onUpdate({ x: origRight - newW, width: newW, depth: newD });
+          })}
+          {/* NE corner */}
+          {makeResizeHandle(rx + rw, ry, (nx, ny) => {
+            const origBottom = (el.y ?? 0) + (el.depth ?? 0);
+            const newW = Math.max(0.5, nx - (el.x ?? 0));
+            const newD = Math.max(0.5, origBottom - ny);
+            onUpdate({ y: origBottom - newD, width: newW, depth: newD });
+          })}
+          {/* NW corner */}
+          {makeResizeHandle(rx, ry, (nx, ny) => {
+            const origRight = (el.x ?? 0) + (el.width ?? 0);
+            const origBottom = (el.y ?? 0) + (el.depth ?? 0);
+            const newW = Math.max(0.5, origRight - nx);
+            const newD = Math.max(0.5, origBottom - ny);
+            onUpdate({ x: origRight - newW, y: origBottom - newD, width: newW, depth: newD });
+          })}
+        </>
       )}
-    </Group>
+    </>
   );
 }
 

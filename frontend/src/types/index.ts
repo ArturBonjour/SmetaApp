@@ -92,6 +92,7 @@ export interface GeometryElement {
   y2?: number;
   length?: number;
   height?: number;
+  thickness?: number; // wall thickness in meters (default 0.2)
   // Area elements
   x?: number;
   y?: number;
