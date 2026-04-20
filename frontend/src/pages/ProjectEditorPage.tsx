@@ -12,7 +12,7 @@ import EstimationPanel from '../components/Estimation/EstimationPanel';
 import VersionHistoryPanel from '../components/Editor/VersionHistoryPanel';
 import View3D from '../components/Editor/View3D';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Save, RefreshCw, Loader2, CheckCircle, PanelLeft, PanelRight, Command, History, Box, LayoutDashboard, Layers3, Pencil, Check, X } from 'lucide-react';
+import { ArrowLeft, Save, RefreshCw, Loader2, CheckCircle, PanelLeft, PanelRight, Command, History, Box, LayoutDashboard, Layers3, Pencil, Check, X, Tag, Calendar, DollarSign } from 'lucide-react';
 
 interface Props {
   onCommandPalette?: () => void;
@@ -175,6 +175,41 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
             </button>
           )}
         </div>
+
+        {/* Project metadata chips */}
+        {project && (project.tags || project.deadline || project.budget) && (
+          <div className="hidden lg:flex items-center gap-1.5 flex-shrink-0">
+            {project.tags && project.tags.split(',').slice(0, 2).map((tag) => (
+              <span key={tag} className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium">
+                <Tag className="w-2.5 h-2.5" />
+                {tag.trim()}
+              </span>
+            ))}
+            {project.deadline && (() => {
+              const d = new Date(project.deadline);
+              const now = new Date();
+              const diff = Math.ceil((d.getTime() - now.getTime()) / 86400000);
+              const isOverdue = diff < 0;
+              const isSoon = diff <= 7 && diff >= 0;
+              return (
+                <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                  isOverdue ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400' :
+                  isSoon ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400' :
+                  'bg-slate-50 dark:bg-slate-800 text-slate-500'
+                }`}>
+                  <Calendar className="w-2.5 h-2.5" />
+                  {isOverdue ? `−${Math.abs(diff)}д` : `${diff}д`}
+                </span>
+              );
+            })()}
+            {project.budget && (
+              <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-medium">
+                <DollarSign className="w-2.5 h-2.5" />
+                {(project.budget / 1000).toFixed(0)}к ₽
+              </span>
+            )}
+          </div>
+        )}
 
         {/* 2D / 3D toggle */}
         <div className="flex items-center gap-1 bg-[var(--bg-input)] rounded-lg p-1">

@@ -1,12 +1,15 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Group, Text } from 'react-konva';
 import Konva from 'konva';
+import { AnimatePresence } from 'framer-motion';
 import { useEditorStore } from '../../store/editor';
 import { useThemeStore } from '../../store/theme';
 import type { GeometryElement } from '../../types';
 import { v4 as uuid } from 'uuid';
 import ContextMenu from './ContextMenu';
 import { CanvasRuler, RulerCorner, RULER_SIZE } from './CanvasRuler';
+import EditorStatusBar from './EditorStatusBar';
+import CanvasEmptyGuide from './CanvasEmptyGuide';
 
 const ELEMENT_COLORS: Record<string, string> = {
   wall:       '#94a3b8',
@@ -61,6 +64,7 @@ export default function Editor() {
   const [isPanningActive, setIsPanningActive] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; elementId: string } | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null);
+  const [mouseWorldPos, setMouseWorldPos] = useState<{ x: number; y: number } | null>(null);
   const shiftRef = useRef(false);
   const { geometry, selectedId, tool, snapToGrid: snap, scale, hiddenIds,
     setSelectedId, addElement, updateElement, removeElement, duplicateElement,
@@ -260,6 +264,9 @@ export default function Editor() {
       } else {
         setSnapIndicator(null);
       }
+      // Update cursor coords even when idle
+      const { x: wx, y: wy } = getSnappedWorldPos();
+      setMouseWorldPos({ x: wx, y: wy });
       return;
     }
 
@@ -294,6 +301,7 @@ export default function Editor() {
     }
 
     setDrawing((d) => ({ ...d, currentX: x, currentY: y }));
+    setMouseWorldPos({ x, y });
   }, [isPanningActive, panStart, drawing.active, drawing.startX, drawing.startY, tool, getSnappedWorldPos, findEndpointSnap]);
 
   const handleStageMouseUp = useCallback(() => {
@@ -387,10 +395,9 @@ export default function Editor() {
     );
   }
 
-  const zoomPercent = Math.round(stageScale * 100);
-
   return (
-    <div ref={containerRef} className="w-full h-full bg-slate-50 dark:bg-[#0e1420] relative overflow-hidden select-none">
+    <div className="w-full h-full flex flex-col">
+    <div ref={containerRef} className="flex-1 bg-slate-50 dark:bg-[#0e1420] relative overflow-hidden select-none">
       {/* Canvas rulers */}
       <CanvasRuler
         direction="h"
@@ -409,6 +416,14 @@ export default function Editor() {
         isDark={isDark}
       />
       <RulerCorner isDark={isDark} />
+
+      {/* Empty canvas onboarding guide */}
+      <AnimatePresence>
+        {geometry.elements.length === 0 && !drawing.active && (
+          <CanvasEmptyGuide onPickTool={(t) => useEditorStore.getState().setTool(t as any)} />
+        )}
+      </AnimatePresence>
+
       <Stage
         ref={stageRef}
         width={stageSize.width - RULER_SIZE}
@@ -558,17 +573,8 @@ export default function Editor() {
         </div>
       )}
 
-      {/* Status bar */}
-      <div className="absolute bottom-4 right-4 flex items-center gap-2">
-        {/* Fit to screen button */}
-        <button
-          onClick={fitToScreen}
-          title="По размеру (F)"
-          className="bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-lg px-2.5 py-1.5 text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-white dark:hover:bg-slate-700 transition-colors"
-        >
-          ⊡
-        </button>
-        {/* Minimap */}
+      {/* Minimap - floating bottom-right */}
+      <div className="absolute bottom-3 right-3 z-10">
         <Minimap
           elements={geometry.elements}
           scale={scale}
@@ -576,33 +582,7 @@ export default function Editor() {
           stageOffset={stageOffset}
           stageScale={stageScale}
         />
-        <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-lg px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm font-mono">
-          {zoomPercent}% · 1☐=1м
-        </div>
       </div>
-
-      {/* Quick stats bar – bottom left */}
-      {geometry.elements.length > 0 && (
-        <div className="absolute bottom-4 left-4 flex items-center gap-2 flex-wrap">
-          {(() => {
-            const walls = geometry.elements.filter((e) => e.type === 'wall');
-            const totalWallLen = walls.reduce((s, e) => s + (e.length ?? 0), 0);
-            const floors = geometry.elements.filter((e) => e.type === 'floor');
-            const totalArea = floors.reduce((s, e) => s + (e.width ?? 0) * (e.depth ?? 0), 0);
-            const roofs = geometry.elements.filter((e) => e.type === 'roof');
-            const stats = [
-              walls.length > 0 && `🧱 ${walls.length} ст · ${totalWallLen.toFixed(1)}м`,
-              floors.length > 0 && `📐 ${totalArea.toFixed(1)}м² пол`,
-              roofs.length > 0 && `🏠 кровля`,
-            ].filter(Boolean);
-            return stats.map((s, i) => (
-              <div key={i} className="bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-lg px-2.5 py-1 text-xs text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
-                {s}
-              </div>
-            ));
-          })()}
-        </div>
-      )}
 
       {/* Context Menu */}
       {ctxMenu && (
@@ -637,6 +617,12 @@ export default function Editor() {
           }}
         />
       )}
+    </div>
+    <EditorStatusBar
+      mouseWorldPos={mouseWorldPos}
+      stageScale={stageScale}
+      onFitToScreen={fitToScreen}
+    />
     </div>
   );
 }
