@@ -3,6 +3,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# Generate Prisma client (needed for TS types during compilation)
+RUN node_modules/.bin/prisma generate
 # Build main application
 RUN npm run build
 # Compile seed script separately (uses tsconfig.seed.json with rootDir=./)
