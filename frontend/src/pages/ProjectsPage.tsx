@@ -201,8 +201,10 @@ export default function ProjectsPage({ onCommandPalette }: Props) {
       setProjects(pRes.data);
       setTemplates(tRes.data);
       setStats(sRes.data);
-    } catch {
-      toast.error('Ошибка загрузки');
+    } catch (err: any) {
+      if (err?.response?.status !== 401) {
+        toast.error('Ошибка загрузки');
+      }
     } finally {
       setLoading(false);
     }

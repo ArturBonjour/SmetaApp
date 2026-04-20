@@ -18,9 +18,12 @@ api.interceptors.response.use(
   (r) => r,
   (error) => {
     if (error.response?.status === 401) {
-      // Use the Zustand store logout so React re-renders and PrivateRoute
-      // handles the redirect via React Router (no hard page reload / no loop).
-      useAuthStore.getState().logout();
+      // Only logout if there was actually a stored token (real session expiry,
+      // not an unauthenticated request that slipped through)
+      const token = localStorage.getItem('smeta_token');
+      if (token) {
+        useAuthStore.getState().logout();
+      }
     }
     return Promise.reject(error);
   }

@@ -13,7 +13,7 @@ const SHORTCUTS = [
     items: [
       { keys: ['V'], desc: 'Выбор' },
       { keys: ['W'], desc: 'Рисовать стену' },
-      { keys: ['F'], desc: 'По размеру / Пол' },
+      { keys: ['P'], desc: 'Рисовать пол' },
       { keys: ['R'], desc: 'Рисовать кровлю' },
       { keys: ['N'], desc: 'Рисовать фундамент' },
       { keys: ['I'], desc: 'Добавить окно' },

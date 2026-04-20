@@ -8,7 +8,7 @@ import clsx from 'clsx';
 const DRAW_TOOLS = [
   { id: 'select',     label: 'Выбор',      icon: MousePointer2, shortcut: 'V' },
   { id: 'wall',       label: 'Стена',      icon: Minus,        shortcut: 'W' },
-  { id: 'floor',      label: 'Пол',        icon: Square,       shortcut: 'F' },
+  { id: 'floor',      label: 'Пол',        icon: Square,       shortcut: 'P' },
   { id: 'roof',       label: 'Кровля',     icon: Triangle,     shortcut: 'R' },
   { id: 'foundation', label: 'Фундамент',  icon: Square,       shortcut: 'N' },
   { id: 'window',     label: 'Окно',       icon: AppWindow,    shortcut: 'I' },

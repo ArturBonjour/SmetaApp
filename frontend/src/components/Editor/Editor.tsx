@@ -43,6 +43,34 @@ function snapToGrid(val: number, grid: number): number {
   return Math.round(val / grid) * grid;
 }
 
+/**
+ * Find the nearest point on any wall and return the snapped position + wall angle.
+ * Returns null when no wall is within maxDist meters.
+ */
+function findNearestWallSnap(
+  pos: { x: number; y: number },
+  elements: GeometryElement[],
+  maxDist = 1.5,
+): { x: number; y: number; rotation: number } | null {
+  let best: { x: number; y: number; rotation: number; dist: number } | null = null;
+  for (const el of elements) {
+    if (el.type !== 'wall') continue;
+    const x1 = el.x1!, y1 = el.y1!, x2 = el.x2!, y2 = el.y2!;
+    const wdx = x2 - x1, wdy = y2 - y1;
+    const lenSq = wdx * wdx + wdy * wdy;
+    if (lenSq < 0.01) continue;
+    // Project click point onto the wall segment, clamped 10-90% to avoid corners
+    const t = Math.max(0.1, Math.min(0.9, ((pos.x - x1) * wdx + (pos.y - y1) * wdy) / lenSq));
+    const projX = x1 + t * wdx;
+    const projY = y1 + t * wdy;
+    const dist = Math.hypot(pos.x - projX, pos.y - projY);
+    if (!best || dist < best.dist) {
+      best = { x: projX, y: projY, rotation: Math.atan2(wdy, wdx), dist };
+    }
+  }
+  return best && best.dist < maxDist ? { x: best.x, y: best.y, rotation: best.rotation } : null;
+}
+
 // Transform a stage-container position to canvas (meter) position
 function toWorld(x: number, y: number, offset: { x: number; y: number }, stageScale: number, scale: number) {
   const layerX = (x - offset.x) / stageScale;
@@ -349,10 +377,13 @@ export default function Editor() {
       return;
     }
     if (tool === 'window' || tool === 'door') {
-      const { x, y } = getSnappedWorldPos();
+      const raw = getSnappedWorldPos();
       const id = uuid();
+      // Try to snap to the nearest wall
+      const wallSnap = findNearestWallSnap(raw, geometry.elements, 2.0);
+      const { x, y, rotation } = wallSnap ?? { ...raw, rotation: 0 };
       addElement({
-        id, type: tool, x, y,
+        id, type: tool, x, y, rotation,
         label: tool === 'window' ? 'Окно' : 'Дверь',
       });
     }
@@ -630,6 +661,7 @@ export default function Editor() {
 /* ─── ElementRenderer ──────────────────────────────────────────────────── */
 interface ElementRendererProps {
   el: GeometryElement;
+  allElements: GeometryElement[];
   scale: number;
   selected: boolean;
   onSelect: () => void;
@@ -639,7 +671,7 @@ interface ElementRendererProps {
   gridSize: number;
 }
 
-function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdate, snap, gridSize }: ElementRendererProps) {
+function ElementRenderer({ el, allElements, scale, selected, onSelect, onContextMenu, onUpdate, snap, gridSize }: ElementRendererProps) {
   const color = ELEMENT_COLORS[el.type] || '#ccc';
   const stroke = ELEMENT_STROKE[el.type] || '#999';
 
@@ -658,6 +690,20 @@ function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdat
       const newLen = parseFloat(Math.sqrt((newX2 - newX1) ** 2 + (newY2 - newY1) ** 2).toFixed(2));
       onUpdate({ x1: newX1, y1: newY1, x2: newX2, y2: newY2, length: newLen });
       e.target.position({ x: newX1 * scale, y: newY1 * scale });
+    } else if (el.type === 'door' || el.type === 'window') {
+      // Re-snap to nearest wall after drag
+      const rawX = e.target.x() / scale;
+      const rawY = e.target.y() / scale;
+      const wallSnap = findNearestWallSnap({ x: rawX, y: rawY }, allElements, 2.0);
+      if (wallSnap) {
+        onUpdate({ x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation });
+        e.target.position({ x: wallSnap.x * scale, y: wallSnap.y * scale });
+      } else {
+        const nx = snapVal(e.target.x()) / scale;
+        const ny = snapVal(e.target.y()) / scale;
+        onUpdate({ x: nx, y: ny });
+        e.target.position({ x: nx * scale, y: ny * scale });
+      }
     } else {
       const nx = snapVal(e.target.x()) / scale;
       const ny = snapVal(e.target.y()) / scale;
@@ -742,13 +788,22 @@ function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdat
   if (el.type === 'window') {
     const cx = (el.x ?? 0) * scale;
     const cy = (el.y ?? 0) * scale;
-    const W = 1.2 * scale;
-    const H = 0.5 * scale;
+    const W = (el.width ?? 1.2) * scale;   // window width along wall
+    const WT = (el.thickness ?? 0.2) * scale; // wall thickness
+    const rotDeg = ((el.rotation ?? 0) * 180) / Math.PI;
     return (
-      <Group draggable x={cx} y={cy} onDragEnd={handleDragEnd} onClick={onSelect} onContextMenu={onContextMenu}>
-        <Rect x={-W / 2} y={-H / 2} width={W} height={H} fill="#bae6fd" stroke={selected ? '#3b82f6' : '#0ea5e9'} strokeWidth={selected ? 2 : 1.5} cornerRadius={2} />
-        <Line points={[0, -H / 2, 0, H / 2]} stroke="#0ea5e9" strokeWidth={1} />
-        {selected && <Rect x={-W / 2 - 3} y={-H / 2 - 3} width={W + 6} height={H + 6} stroke="#3b82f6" strokeWidth={1.5} dash={[4, 2]} fill="transparent" />}
+      <Group draggable x={cx} y={cy} rotation={rotDeg} onDragEnd={handleDragEnd} onClick={onSelect} onContextMenu={onContextMenu}>
+        {/* Frame fill */}
+        <Rect x={-W / 2} y={-WT / 2} width={W} height={WT}
+          fill="#bae6fd" stroke={selected ? '#3b82f6' : '#0ea5e9'}
+          strokeWidth={selected ? 2 : 1.5} cornerRadius={1} />
+        {/* Glass pane dividers */}
+        <Line points={[-W / 6, -WT / 2, -W / 6, WT / 2]} stroke="#0ea5e9" strokeWidth={0.8} />
+        <Line points={[W / 6, -WT / 2, W / 6, WT / 2]} stroke="#0ea5e9" strokeWidth={0.8} />
+        {selected && (
+          <Rect x={-W / 2 - 4} y={-WT / 2 - 4} width={W + 8} height={WT + 8}
+            stroke="#3b82f6" strokeWidth={1.5} dash={[4, 2]} fill="transparent" />
+        )}
       </Group>
     );
   }
@@ -756,14 +811,33 @@ function ElementRenderer({ el, scale, selected, onSelect, onContextMenu, onUpdat
   if (el.type === 'door') {
     const cx = (el.x ?? 0) * scale;
     const cy = (el.y ?? 0) * scale;
-    const W = 0.9 * scale;
-    const H = 2.0 * scale;
+    const W = (el.width ?? 0.9) * scale;   // door width along wall
+    const WT = (el.thickness ?? 0.2) * scale; // wall thickness
+    const rotDeg = ((el.rotation ?? 0) * 180) / Math.PI;
+    const flip = el.flipSwing ? -1 : 1;   // swing direction
+
+    // Arc: centered at (-W/2, 0), sweep 0°→90° (or 0°→-90° if flipped)
+    const arcPts: number[] = [];
+    for (let a = 0; a <= 90; a += 6) {
+      const rad = (a * Math.PI) / 180;
+      arcPts.push(-W / 2 + Math.cos(rad) * W, flip * Math.sin(rad) * W);
+    }
+
     return (
-      <Group draggable x={cx} y={cy} onDragEnd={handleDragEnd} onClick={onSelect} onContextMenu={onContextMenu}>
-        <Rect x={-W / 2} y={-H / 2} width={W} height={H} fill="#fecaca" stroke={selected ? '#3b82f6' : '#ef4444'} strokeWidth={selected ? 2 : 1.5} cornerRadius={2} />
-        {/* Door swing arc */}
-        <ArcShape radius={H * 0.6} startAngle={-45} endAngle={45} stroke="#ef4444" strokeWidth={1} />
-        {selected && <Rect x={-W / 2 - 3} y={-H / 2 - 3} width={W + 6} height={H + 6} stroke="#3b82f6" strokeWidth={1.5} dash={[4, 2]} fill="transparent" />}
+      <Group draggable x={cx} y={cy} rotation={rotDeg} onDragEnd={handleDragEnd} onClick={onSelect} onContextMenu={onContextMenu}>
+        {/* Wall opening strip */}
+        <Rect x={-W / 2} y={-WT / 2} width={W} height={WT}
+          fill="#fecaca" stroke={selected ? '#3b82f6' : '#ef4444'}
+          strokeWidth={selected ? 2 : 1.5} cornerRadius={1} />
+        {/* Door panel (perpendicular, going into room) */}
+        <Line points={[-W / 2, 0, -W / 2, flip * W]}
+          stroke="#ef4444" strokeWidth={2} lineCap="round" />
+        {/* Swing arc */}
+        <Line points={arcPts} stroke="#ef4444" strokeWidth={1} dash={[3, 2]} />
+        {selected && (
+          <Rect x={-W / 2 - 4} y={Math.min(0, flip * W) - 4} width={W + 8} height={Math.abs(flip * W) + WT + 8}
+            stroke="#3b82f6" strokeWidth={1.5} dash={[4, 2]} fill="transparent" />
+        )}
       </Group>
     );
   }

@@ -102,6 +102,9 @@ export interface GeometryElement {
   y?: number;
   width?: number;
   depth?: number;
+  // Door / window specific
+  rotation?: number;   // wall angle in radians (for doors and windows)
+  flipSwing?: boolean; // flip door swing to the other side
   // Material override
   catalogItemId?: string;
 }

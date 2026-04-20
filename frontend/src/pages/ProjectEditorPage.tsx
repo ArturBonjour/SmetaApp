@@ -56,14 +56,20 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveGeometry(); }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S') { e.preventDefault(); saveGeometry(false, true); }
       if (e.altKey && e.key === '3') { e.preventDefault(); setViewMode((m) => m === '2d' ? '3d' : '2d'); }
-      const toolMap: Record<string, string> = { v: 'select', w: 'wall', r: 'roof', n: 'foundation', i: 'window', d: 'door' };
-      // Note: 'f' is reserved for fit-to-screen in Editor.tsx
+      // Ctrl+D — duplicate selected element
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault();
+        const { selectedId, duplicateElement } = useEditorStore.getState();
+        if (selectedId) duplicateElement(selectedId);
+      }
+      // Tool shortcuts: p=floor (f is reserved for fit-to-screen)
+      const toolMap: Record<string, string> = { v: 'select', w: 'wall', p: 'floor', r: 'roof', n: 'foundation', i: 'window', d: 'door' };
       if (!e.ctrlKey && !e.metaKey && !e.altKey && toolMap[e.key.toLowerCase()]) {
         useEditorStore.getState().setTool(toolMap[e.key.toLowerCase()] as any);
       }
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'f' && !e.shiftKey) {
-        // 'f' is handled in Editor.tsx for fit-to-screen
-        return;
+      // G — toggle snap to grid
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'g') {
+        useEditorStore.getState().toggleSnap();
       }
     };
     window.addEventListener('keydown', handleKey);

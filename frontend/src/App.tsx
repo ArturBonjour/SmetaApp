@@ -17,11 +17,11 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 const pageVariants = {
-  initial: { opacity: 0, y: 8 },
-  in: { opacity: 1, y: 0 },
-  out: { opacity: 0, y: -8 },
+  initial: { opacity: 0 },
+  in: { opacity: 1 },
+  out: { opacity: 0 },
 };
-const pageTransition = { duration: 0.2, ease: 'easeInOut' as const };
+const pageTransition = { duration: 0.15, ease: 'easeInOut' as const };
 
 function AnimatedRoutes({ onCommandPalette }: { onCommandPalette: () => void }) {
   const location = useLocation();
