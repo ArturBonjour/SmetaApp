@@ -174,6 +174,16 @@ export default function ProjectsPage({ onCommandPalette }: Props) {
     return () => window.removeEventListener('open-new-project', handler);
   }, []);
   useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        setShowNew(true);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+  useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) setShowSortMenu(false);
     };
@@ -643,6 +653,15 @@ export default function ProjectsPage({ onCommandPalette }: Props) {
           </>
         )}
       </AnimatePresence>
+
+      {/* Floating action button for mobile */}
+      <button
+        onClick={() => setShowNew(true)}
+        className="fixed bottom-6 right-6 z-30 md:hidden w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-2xl flex items-center justify-center transition-all active:scale-95"
+        title="Новый проект (Ctrl+N)"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
     </div>
   );
 }

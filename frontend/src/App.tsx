@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAuthStore } from './store/auth';
 import { useThemeStore } from './store/theme';
 import LoginPage from './pages/LoginPage';
@@ -13,6 +14,59 @@ import KeyboardShortcuts from './components/KeyboardShortcuts';
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+const pageVariants = {
+  initial: { opacity: 0, y: 8 },
+  in: { opacity: 1, y: 0 },
+  out: { opacity: 0, y: -8 },
+};
+const pageTransition = { duration: 0.2, ease: 'easeInOut' as const };
+
+function AnimatedRoutes({ onCommandPalette }: { onCommandPalette: () => void }) {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname.split('/')[1] || 'home'}
+        initial="initial"
+        animate="in"
+        exit="out"
+        variants={pageVariants}
+        transition={pageTransition}
+        style={{ minHeight: '100%' }}
+      >
+        <Routes location={location}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <ProjectsPage onCommandPalette={onCommandPalette} />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/catalog"
+            element={
+              <PrivateRoute>
+                <CatalogPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/projects/:id"
+            element={
+              <PrivateRoute>
+                <ProjectEditorPage onCommandPalette={onCommandPalette} />
+              </PrivateRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
+  );
 }
 
 export default function App() {
@@ -73,36 +127,7 @@ export default function App() {
         onNewProject={() => window.dispatchEvent(new CustomEvent('open-new-project'))}
       />
       <KeyboardShortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <ProjectsPage onCommandPalette={() => setCmdOpen(true)} />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/catalog"
-          element={
-            <PrivateRoute>
-              <CatalogPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/projects/:id"
-          element={
-            <PrivateRoute>
-              <ProjectEditorPage onCommandPalette={() => setCmdOpen(true)} />
-            </PrivateRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <AnimatedRoutes onCommandPalette={() => setCmdOpen(true)} />
     </BrowserRouter>
   );
 }
-
-

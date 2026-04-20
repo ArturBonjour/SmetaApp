@@ -64,3 +64,47 @@ body {
 * { transition: background-color 0.2s, border-color 0.2s; }
 svg, button, a { transition: none; }
 
+/* Focus ring style */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: rgba(37, 99, 235, 0.2);
+  color: var(--text-1);
+}
+
+/* Animated gradient border for selected/active elements */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer-border {
+  background: linear-gradient(90deg, var(--border) 25%, #93c5fd 50%, var(--border) 75%);
+  background-size: 200% auto;
+  animation: shimmer 2s infinite linear;
+}
+
+/* Status indicator pulse */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+
+/* Tooltip animation */
+@keyframes tooltip-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Number counter animation */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.count-up { animation: count-up 0.4s ease-out both; }
+

@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Search, Edit2, Trash2, Check, X,
-  Layers, Box, Package, ChevronDown,
+  Layers, Box, Package, ChevronDown, Upload, Download,
 } from 'lucide-react';
 import api from '../lib/api';
 import type { CatalogItem } from '../types';
@@ -150,6 +150,8 @@ export default function CatalogPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const loadCatalog = useCallback(async () => {
     try {
@@ -163,6 +165,55 @@ export default function CatalogPage() {
   }, []);
 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
+
+  const exportCSV = () => {
+    const header = 'name,category,unit,unitPrice,description';
+    const rows = items
+      .filter((i) => !i.isSystem)
+      .map((i) => [i.name, i.category, i.unit, i.unitPrice, i.description || ''].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'catalog_export.csv'; a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Экспортировано ${rows.length} позиций`);
+  };
+
+  const importCSV = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) { toast.error('Файл пуст'); return; }
+      let added = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+        const [name, category, unit, unitPriceStr, description] = cols;
+        if (!name || !unitPriceStr) continue;
+        const unitPrice = parseFloat(unitPriceStr);
+        if (isNaN(unitPrice)) continue;
+        const validCats = ['wall','floor','roof','window','door','foundation','engineering','finishing','other'];
+        const validUnits = ['m2','ml','m3','pcs','hour'];
+        try {
+          const { data } = await api.post('/catalog', {
+            name, unitPrice,
+            category: validCats.includes(category) ? category : 'other',
+            unit: validUnits.includes(unit) ? unit : 'pcs',
+            description: description || undefined,
+          });
+          setItems((p) => [...p, data]);
+          added++;
+        } catch {}
+      }
+      toast.success(`Импортировано ${added} позиций`);
+    } catch {
+      toast.error('Ошибка импорта CSV');
+    } finally {
+      setImporting(false);
+      if (csvInputRef.current) csvInputRef.current.value = '';
+    }
+  };
 
   const handleAdd = async (form: FormState) => {
     if (!form.name || !form.unitPrice) return;
@@ -244,13 +295,40 @@ export default function CatalogPage() {
               Системные + пользовательские расценки для сметного расчёта
             </p>
           </div>
-          <button
-            onClick={() => { setShowAddForm(true); setEditingId(null); }}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl shadow-sm transition"
-          >
-            <Plus className="w-4 h-4" />
-            Добавить позицию
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Hidden CSV input */}
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f); }}
+            />
+            <button
+              onClick={() => csvInputRef.current?.click()}
+              disabled={importing}
+              title="Импорт из CSV"
+              className="flex items-center gap-1.5 px-3 py-2 bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-2)] hover:border-blue-400 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+            >
+              <Upload className="w-4 h-4" />
+              {importing ? 'Импорт...' : 'CSV'}
+            </button>
+            <button
+              onClick={exportCSV}
+              title="Экспорт в CSV"
+              className="flex items-center gap-1.5 px-3 py-2 bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-2)] hover:border-blue-400 text-sm font-medium rounded-xl transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              CSV
+            </button>
+            <button
+              onClick={() => { setShowAddForm(true); setEditingId(null); }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl shadow-sm transition"
+            >
+              <Plus className="w-4 h-4" />
+              Добавить позицию
+            </button>
+          </div>
         </div>
 
         {/* Stats row */}

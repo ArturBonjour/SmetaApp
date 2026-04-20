@@ -263,9 +263,11 @@ export default function ProjectEditorPage({ onCommandPalette }: Props) {
           onClick={() => saveGeometry(false)}
           disabled={saving}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+          title="Сохранить (Ctrl+S)"
         >
           <Save className="w-3.5 h-3.5" />
           Сохранить
+          <kbd className="ml-0.5 text-[9px] bg-blue-500 border border-blue-400 px-1 py-0.5 rounded font-mono opacity-80">⌘S</kbd>
         </button>
 
         <div className="w-px h-5 bg-[var(--border)]" />

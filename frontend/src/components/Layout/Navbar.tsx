@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../../store/auth';
 import { useThemeStore } from '../../store/theme';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { Building2, LogOut, Sun, Moon, Command, LayoutDashboard, BookOpen, ChevronDown } from 'lucide-react';
+import { Building2, LogOut, Sun, Moon, Command, LayoutDashboard, BookOpen, ChevronDown, Bell } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import api from '../../lib/api';
 
 interface NavbarProps {
   onCommandPalette?: () => void;
@@ -30,15 +31,27 @@ export default function Navbar({ onCommandPalette }: NavbarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [activities, setActivities] = useState<Array<{ id: string; action: string; entityName?: string; userName?: string; createdAt: string }>>([]);
+  const [unread, setUnread] = useState(0);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setShowUserMenu(false);
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotifications(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    api.get('/activity?limit=10').then((r) => {
+      setActivities(r.data?.items || []);
+      setUnread(Math.min(r.data?.items?.length || 0, 5));
+    }).catch(() => {});
+  }, [location.pathname]);
 
   const handleLogout = () => {
     setShowUserMenu(false);
@@ -110,6 +123,61 @@ export default function Navbar({ onCommandPalette }: NavbarProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
+
+          {/* Notification bell */}
+          <div className="relative" ref={notifRef}>
+            <button
+              onClick={() => { setShowNotifications((s) => !s); setUnread(0); }}
+              className="relative p-2 rounded-xl text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-input)] transition-colors"
+              title="Уведомления"
+            >
+              <Bell className="w-4 h-4" />
+              {unread > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+              )}
+            </button>
+            <AnimatePresence>
+              {showNotifications && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 top-full mt-1.5 w-72 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl z-50 overflow-hidden"
+                >
+                  <div className="px-4 py-2.5 border-b border-[var(--border)] flex items-center justify-between">
+                    <span className="text-sm font-semibold text-[var(--text-1)]">Активность</span>
+                    <span className="text-xs text-[var(--text-3)]">{activities.length} событий</span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {activities.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-[var(--text-3)]">Нет активности</div>
+                    ) : (
+                      activities.slice(0, 10).map((act) => (
+                        <div key={act.id} className="px-4 py-2.5 hover:bg-[var(--bg-input)] border-b border-[var(--border)] last:border-0 transition-colors">
+                          <div className="text-xs text-[var(--text-2)] leading-relaxed">{act.action?.replace('.', ': ')}</div>
+                          {act.entityName && <div className="text-[10px] text-[var(--text-3)] mt-0.5 font-medium truncate">{act.entityName}</div>}
+                          {act.userName && <div className="text-[10px] text-[var(--text-3)]">{act.userName}</div>}
+                          <div className="text-[10px] text-[var(--text-3)] mt-0.5">
+                            {new Date(act.createdAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="px-4 py-2 border-t border-[var(--border)]">
+                    <button
+                      onClick={() => { setShowNotifications(false); navigate('/'); }}
+                      className="text-xs text-blue-500 hover:text-blue-600 transition-colors"
+                    >
+                      Вся активность →
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           {/* Dark mode toggle */}
           <button
             onClick={toggle}
