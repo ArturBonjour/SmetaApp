@@ -135,31 +135,79 @@ function RoofMesh({ el }: { el: GeometryElement }) {
   );
 }
 
-// --- Window as colored slab on a wall approximation ---
+// --- Window as colored slab on a wall, oriented along wall ---
 function WindowMesh({ el }: { el: GeometryElement }) {
   const x = el.x ?? 0;
   const z = el.y ?? 0;
+  const width = el.width ?? 1.2;
+  const height = el.height ?? 1.4;
+  const angle = el.rotation ?? 0;
+  const wallThickness = 0.14;
+  const sillHeight = 0.85;
   const mat = MATERIALS.window;
 
   return (
-    <mesh position={[x, 1.2, z]} castShadow>
-      <boxGeometry args={[1.0, 1.0, 0.08]} />
-      <meshStandardMaterial color={mat.color} transparent opacity={0.7} roughness={0.05} metalness={0.3} />
-    </mesh>
+    <group position={[x, sillHeight + height / 2, z]} rotation={[0, -angle, 0]}>
+      {/* Glass pane */}
+      <mesh castShadow>
+        <boxGeometry args={[width, height, wallThickness]} />
+        <meshStandardMaterial color={mat.color} transparent opacity={0.65} roughness={0.05} metalness={0.3} />
+      </mesh>
+      {/* Horizontal cross bar */}
+      <mesh position={[0, 0, 0]}>
+        <boxGeometry args={[width, 0.04, wallThickness + 0.02]} />
+        <meshStandardMaterial color="#94a3b8" roughness={0.5} />
+      </mesh>
+      {/* Frame outline - top, bottom, left, right */}
+      {[
+        { pos: [0,  height / 2, 0] as [number,number,number], args: [width + 0.04, 0.05, wallThickness + 0.02] as [number,number,number] },
+        { pos: [0, -height / 2, 0] as [number,number,number], args: [width + 0.04, 0.05, wallThickness + 0.02] as [number,number,number] },
+        { pos: [-width / 2, 0, 0] as [number,number,number], args: [0.05, height, wallThickness + 0.02] as [number,number,number] },
+        { pos: [ width / 2, 0, 0] as [number,number,number], args: [0.05, height, wallThickness + 0.02] as [number,number,number] },
+      ].map((f, i) => (
+        <mesh key={i} position={f.pos}>
+          <boxGeometry args={f.args} />
+          <meshStandardMaterial color="#64748b" roughness={0.6} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
-// --- Door ---
+// --- Door as a panel in a wall, oriented along wall ---
 function DoorMesh({ el }: { el: GeometryElement }) {
   const x = el.x ?? 0;
   const z = el.y ?? 0;
+  const width = el.width ?? 0.9;
+  const height = el.height ?? 2.1;
+  const angle = el.rotation ?? 0;
+  const wallThickness = 0.12;
   const mat = MATERIALS.door;
 
   return (
-    <mesh position={[x, 1.1, z]} castShadow>
-      <boxGeometry args={[0.9, 2.2, 0.08]} />
-      <meshStandardMaterial color={mat.color} roughness={0.7} />
-    </mesh>
+    <group position={[x, height / 2, z]} rotation={[0, -angle, 0]}>
+      {/* Door panel */}
+      <mesh castShadow>
+        <boxGeometry args={[width, height, wallThickness]} />
+        <meshStandardMaterial color={mat.color} roughness={0.7} />
+      </mesh>
+      {/* Door frame */}
+      {[
+        { pos: [0,  height / 2, 0] as [number,number,number], args: [width + 0.08, 0.06, wallThickness + 0.04] as [number,number,number] },
+        { pos: [-width / 2, 0, 0] as [number,number,number], args: [0.06, height + 0.06, wallThickness + 0.04] as [number,number,number] },
+        { pos: [ width / 2, 0, 0] as [number,number,number], args: [0.06, height + 0.06, wallThickness + 0.04] as [number,number,number] },
+      ].map((f, i) => (
+        <mesh key={i} position={f.pos}>
+          <boxGeometry args={f.args} />
+          <meshStandardMaterial color="#7f5539" roughness={0.7} />
+        </mesh>
+      ))}
+      {/* Door knob */}
+      <mesh position={[width / 2 - 0.1, -0.1, wallThickness / 2 + 0.04]}>
+        <sphereGeometry args={[0.04, 8, 8]} />
+        <meshStandardMaterial color="#c0a080" metalness={0.8} roughness={0.2} />
+      </mesh>
+    </group>
   );
 }
 

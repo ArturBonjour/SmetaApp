@@ -115,6 +115,60 @@ export default function PropertiesPanel({ projectId: _projectId }: Props) {
           />
         </div>
 
+        {/* Window / Door specific */}
+        {(selected.type === 'window' || selected.type === 'door') && (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Ширина (м)</label>
+                <input
+                  type="number"
+                  value={selected.width ?? (selected.type === 'window' ? 1.2 : 0.9)}
+                  onChange={(e) => handleChange('width', e.target.value)}
+                  className={inputClass}
+                  step="0.1" min="0.4" max="4"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Высота (м)</label>
+                <input
+                  type="number"
+                  value={selected.height ?? (selected.type === 'window' ? 1.4 : 2.1)}
+                  onChange={(e) => handleChange('height', e.target.value)}
+                  className={inputClass}
+                  step="0.1" min="0.5" max="3"
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Поворот (°)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="-180" max="180" step="5"
+                  value={Math.round((selected.rotation ?? 0) * 180 / Math.PI)}
+                  onChange={(e) => updateElement(selected.id, { rotation: parseFloat(e.target.value) * Math.PI / 180 })}
+                  className="flex-1 accent-blue-600"
+                />
+                <span className="text-xs text-[var(--text-2)] font-mono w-10 text-right">
+                  {Math.round((selected.rotation ?? 0) * 180 / Math.PI)}°
+                </span>
+              </div>
+            </div>
+            {selected.type === 'door' && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={selected.flipSwing ?? false}
+                  onChange={(e) => updateElement(selected.id, { flipSwing: e.target.checked })}
+                  className="accent-blue-600 w-4 h-4"
+                />
+                <span className="text-sm text-[var(--text-2)]">Зеркалить открывание</span>
+              </label>
+            )}
+          </>
+        )}
+
         {/* Wall specific */}
         {selected.type === 'wall' && (
           <>

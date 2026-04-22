@@ -93,6 +93,7 @@ export default function Editor() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; elementId: string } | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null);
   const [mouseWorldPos, setMouseWorldPos] = useState<{ x: number; y: number } | null>(null);
+  const [doorWindowPreview, setDoorWindowPreview] = useState<{ x: number; y: number; rotation: number } | null>(null);
   const shiftRef = useRef(false);
   const { geometry, selectedId, tool, snapToGrid: snap, scale, hiddenIds,
     setSelectedId, addElement, updateElement, removeElement, duplicateElement,
@@ -144,6 +145,21 @@ export default function Editor() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
         useEditorStore.getState().pasteElement();
+      }
+      // Undo / Redo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        useEditorStore.getState().undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        useEditorStore.getState().redo();
+      }
+      // Tool shortcuts
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const toolMap: Record<string, string> = { v: 'select', w: 'wall', p: 'floor', r: 'roof', n: 'foundation', i: 'window', d: 'door' };
+        const t = toolMap[e.key.toLowerCase()];
+        if (t) useEditorStore.getState().setTool(t as any);
       }
       // Fit to screen (F key)
       if (e.key === 'f' || e.key === 'F') {
@@ -292,6 +308,14 @@ export default function Editor() {
       } else {
         setSnapIndicator(null);
       }
+      // Door/Window snap preview
+      if ((tool === 'window' || tool === 'door') && pointer) {
+        const raw = getSnappedWorldPos();
+        const wallSnap = findNearestWallSnap(raw, geometry.elements, 3.0);
+        setDoorWindowPreview(wallSnap ?? { ...raw, rotation: 0 });
+      } else {
+        setDoorWindowPreview(null);
+      }
       // Update cursor coords even when idle
       const { x: wx, y: wy } = getSnappedWorldPos();
       setMouseWorldPos({ x: wx, y: wy });
@@ -380,10 +404,12 @@ export default function Editor() {
       const raw = getSnappedWorldPos();
       const id = uuid();
       // Try to snap to the nearest wall
-      const wallSnap = findNearestWallSnap(raw, geometry.elements, 2.0);
+      const wallSnap = findNearestWallSnap(raw, geometry.elements, 3.0);
       const { x, y, rotation } = wallSnap ?? { ...raw, rotation: 0 };
       addElement({
         id, type: tool, x, y, rotation,
+        width:  tool === 'window' ? 1.2 : 0.9,
+        height: tool === 'window' ? 1.4 : 2.1,
         label: tool === 'window' ? 'Окно' : 'Дверь',
       });
     }
@@ -479,6 +505,7 @@ export default function Editor() {
             <ElementRenderer
               key={el.id}
               el={el}
+              allElements={geometry.elements}
               scale={scale}
               selected={selectedId === el.id}
               onSelect={() => { if (tool === 'select') setSelectedId(el.id); }}
@@ -493,6 +520,21 @@ export default function Editor() {
             />
           ))}
 
+          {/* Door / Window hover placement preview */}
+          {doorWindowPreview && (tool === 'window' || tool === 'door') && (() => {
+            const { x: px, y: py, rotation: pr } = doorWindowPreview;
+            const W = (tool === 'window' ? 1.2 : 0.9) * scale;
+            const WT = 0.2 * scale;
+            const rotDeg = pr * 180 / Math.PI;
+            const color = tool === 'window' ? '#bae6fd' : '#fecaca';
+            const stroke2 = tool === 'window' ? '#0ea5e9' : '#ef4444';
+            return (
+              <Group x={px * scale} y={py * scale} rotation={rotDeg} opacity={0.55}>
+                <Rect x={-W / 2} y={-WT / 2} width={W} height={WT}
+                  fill={color} stroke={stroke2} strokeWidth={2 / stageScale} cornerRadius={1} dash={[4 / stageScale, 2 / stageScale]} />
+              </Group>
+            );
+          })()}
           {/* Drawing preview */}
           {drawing.active && tool === 'wall' && (
             <>
