@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  projects  Project[]
+  catalogs  CatalogItem[]
+}
+
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           String       @default("estimator") // admin | manager | estimator
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  projects       ProjectMember[]
+}
+
+model Project {
+  id             String         @id @default(uuid())
+  name           String
+  description    String?
+  tags           String?        // comma-separated tag slugs e.g. "баня,жилой"
+  deadline       DateTime?
+  budget         Float?         // client budget in RUB
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  templateId     String?
+  status         String         @default("draft") // draft | active | completed | archived
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  members        ProjectMember[]
+  versions       ProjectVersion[]
+  currentVersion ProjectVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  currentVersionId String?       @unique
+}
+
+model ProjectMember {
+  id        String  @id @default(uuid())
+  projectId String
+  userId    String
+  role      String  @default("viewer") // owner | editor | viewer
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([projectId, userId])
+}
+
+model ProjectVersion {
+  id          String    @id @default(uuid())
+  projectId   String
+  version     Int
+  label       String?
+  geometryJson String   // JSON: walls, openings, rooms etc
+  createdAt   DateTime  @default(now())
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  currentFor  Project?  @relation("CurrentVersion")
+  estimations Estimation[]
+  @@unique([projectId, version])
+}
+
+model CatalogItem {
+  id             String   @id @default(uuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  name           String
+  category       String   // wall | floor | roof | window | door | foundation | engineering | finishing | other
+  unit           String   // m2 | ml | m3 | pcs | hour
+  unitPrice      Float
+  description    String?
+  isSystem       Boolean  @default(false) // built-in system items
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  estimationItems EstimationItem[]
+}
+
+model Estimation {
+  id               String           @id @default(uuid())
+  projectVersionId String
+  projectVersion   ProjectVersion   @relation(fields: [projectVersionId], references: [id], onDelete: Cascade)
+  totalAmount      Float            @default(0)
+  discount         Float            @default(0)
+  markup           Float            @default(0)
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  items            EstimationItem[]
+  @@unique([projectVersionId])
+}
+
+model EstimationItem {
+  id            String      @id @default(uuid())
+  estimationId  String
+  estimation    Estimation  @relation(fields: [estimationId], references: [id], onDelete: Cascade)
+  catalogItemId String?
+  catalogItem   CatalogItem? @relation(fields: [catalogItemId], references: [id])
+  name          String
+  category      String
+  unit          String
+  quantity      Float
+  unitPrice     Float
+  totalPrice    Float
+  formula       String?     // human-readable formula for transparency
+  geometryRef   String?     // reference to geometry element id
+  sortOrder     Int         @default(0)
+  createdAt     DateTime    @default(now())
+}
+
+model ActivityLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  userName       String
+  action         String   // project.create | project.update | project.delete | project.save | project.status | project.duplicate | estimation.adjust | catalog.add
+  entityType     String   // project | catalog | estimation
+  entityId       String
+  entityName     String
+  metadata       String?  // JSON extras
+  createdAt      DateTime @default(now())
+}
+
+model ProjectTemplate {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  preview      String?  // icon or emoji
+  geometryJson String   // default geometry JSON
+  isSystem     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
