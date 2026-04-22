@@ -93,7 +93,7 @@ export default function Editor() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; elementId: string } | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ x: number; y: number } | null>(null);
   const [mouseWorldPos, setMouseWorldPos] = useState<{ x: number; y: number } | null>(null);
-  const [doorWindowPreview, setDoorWindowPreview] = useState<{ x: number; y: number; rotation: number } | null>(null);
+  const [doorWindowPreview, setDoorWindowPreview] = useState<{ x: number; y: number; rotation: number; snapped?: boolean } | null>(null);
   const shiftRef = useRef(false);
   const { geometry, selectedId, tool, snapToGrid: snap, scale, hiddenIds,
     setSelectedId, addElement, updateElement, removeElement, duplicateElement,
@@ -112,7 +112,7 @@ export default function Editor() {
     return () => ro.disconnect();
   }, []);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (editor-specific only; tool/undo/redo handled in ProjectEditorPage)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Shift') { shiftRef.current = true; return; }
@@ -129,13 +129,13 @@ export default function Editor() {
         e.preventDefault();
         setIsPanning(true);
       }
-      if (e.key === '+' || e.key === '=') {
+      if ((e.key === '+' || e.key === '=') && !e.ctrlKey) {
         setStageScale((s) => Math.min(s * 1.15, 8));
       }
-      if (e.key === '-') {
+      if (e.key === '-' && !e.ctrlKey) {
         setStageScale((s) => Math.max(s / 1.15, 0.1));
       }
-      if (e.key === '0') {
+      if (e.key === '0' && !e.ctrlKey) {
         setStageScale(1);
         setStageOffset({ x: 40, y: 40 });
       }
@@ -146,25 +146,25 @@ export default function Editor() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
         useEditorStore.getState().pasteElement();
       }
-      // Undo / Redo
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        useEditorStore.getState().undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        useEditorStore.getState().redo();
-      }
-      // Tool shortcuts
-      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-        const toolMap: Record<string, string> = { v: 'select', w: 'wall', p: 'floor', r: 'roof', n: 'foundation', i: 'window', d: 'door' };
-        const t = toolMap[e.key.toLowerCase()];
-        if (t) useEditorStore.getState().setTool(t as any);
-      }
       // Fit to screen (F key)
-      if (e.key === 'f' || e.key === 'F') {
-        if ((e.ctrlKey || e.metaKey) || e.altKey) return;
+      if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         fitToScreen();
+      }
+      // Arrow key rotation for selected door/window (15° per press)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && selectedId) {
+        const { geometry: g } = useEditorStore.getState();
+        const el = g.elements.find((x) => x.id === selectedId);
+        if (el && (el.type === 'door' || el.type === 'window')) {
+          const STEP = Math.PI / 12; // 15°
+          if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            useEditorStore.getState().updateElement(selectedId, { rotation: (el.rotation ?? 0) - STEP });
+          }
+          if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            useEditorStore.getState().updateElement(selectedId, { rotation: (el.rotation ?? 0) + STEP });
+          }
+        }
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -177,7 +177,7 @@ export default function Editor() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectedId, removeElement, setSelectedId]);
+  }, [selectedId, removeElement, setSelectedId, fitToScreen]);
 
   // Fit-to-screen: zoom to show all elements
   const fitToScreen = useCallback(() => {
@@ -308,11 +308,12 @@ export default function Editor() {
       } else {
         setSnapIndicator(null);
       }
-      // Door/Window snap preview
+      // Door/Window snap preview (read fresh elements to avoid stale closure)
       if ((tool === 'window' || tool === 'door') && pointer) {
         const raw = getSnappedWorldPos();
-        const wallSnap = findNearestWallSnap(raw, geometry.elements, 3.0);
-        setDoorWindowPreview(wallSnap ?? { ...raw, rotation: 0 });
+        const freshElements = useEditorStore.getState().geometry.elements;
+        const wallSnap = findNearestWallSnap(raw, freshElements, 3.0);
+        setDoorWindowPreview(wallSnap ? { ...wallSnap, snapped: true } : { ...raw, rotation: 0, snapped: false });
       } else {
         setDoorWindowPreview(null);
       }
@@ -403,8 +404,9 @@ export default function Editor() {
     if (tool === 'window' || tool === 'door') {
       const raw = getSnappedWorldPos();
       const id = uuid();
-      // Try to snap to the nearest wall
-      const wallSnap = findNearestWallSnap(raw, geometry.elements, 3.0);
+      // Try to snap to the nearest wall (read fresh from store to avoid stale closure)
+      const freshElements = useEditorStore.getState().geometry.elements;
+      const wallSnap = findNearestWallSnap(raw, freshElements, 3.0);
       const { x, y, rotation } = wallSnap ?? { ...raw, rotation: 0 };
       addElement({
         id, type: tool, x, y, rotation,
@@ -522,16 +524,17 @@ export default function Editor() {
 
           {/* Door / Window hover placement preview */}
           {doorWindowPreview && (tool === 'window' || tool === 'door') && (() => {
-            const { x: px, y: py, rotation: pr } = doorWindowPreview;
+            const { x: px, y: py, rotation: pr, snapped } = doorWindowPreview;
             const W = (tool === 'window' ? 1.2 : 0.9) * scale;
             const WT = 0.2 * scale;
             const rotDeg = pr * 180 / Math.PI;
-            const color = tool === 'window' ? '#bae6fd' : '#fecaca';
-            const stroke2 = tool === 'window' ? '#0ea5e9' : '#ef4444';
+            const color = snapped ? (tool === 'window' ? '#bae6fd' : '#fecaca') : '#94a3b8';
+            const stroke2 = snapped ? (tool === 'window' ? '#0ea5e9' : '#ef4444') : '#64748b';
             return (
-              <Group x={px * scale} y={py * scale} rotation={rotDeg} opacity={0.55}>
+              <Group x={px * scale} y={py * scale} rotation={rotDeg} opacity={snapped ? 0.7 : 0.35}>
                 <Rect x={-W / 2} y={-WT / 2} width={W} height={WT}
-                  fill={color} stroke={stroke2} strokeWidth={2 / stageScale} cornerRadius={1} dash={[4 / stageScale, 2 / stageScale]} />
+                  fill={color} stroke={stroke2} strokeWidth={snapped ? 2 / stageScale : 1 / stageScale}
+                  cornerRadius={1} dash={[4 / stageScale, 2 / stageScale]} />
               </Group>
             );
           })()}
@@ -645,6 +648,30 @@ export default function Editor() {
           {shiftRef.current ? '🔒 Угол зафиксирован · отпустите Shift' : 'Shift — зафиксировать угол 0°/45°/90°'}
         </div>
       )}
+
+      {/* Door/Window placement hint */}
+      {!drawing.active && (tool === 'window' || tool === 'door') && (
+        <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full backdrop-blur pointer-events-none transition-colors flex items-center gap-2 ${
+          doorWindowPreview?.snapped
+            ? 'bg-emerald-700/90 text-white'
+            : 'bg-amber-600/90 text-white'
+        }`}>
+          {doorWindowPreview?.snapped
+            ? `✓ Прицеплено к стене · клик для размещения`
+            : `Наведите на стену для привязки · ↔ клавиши поворота`}
+        </div>
+      )}
+
+      {/* Rotation hint for selected door/window */}
+      {!drawing.active && tool === 'select' && (() => {
+        const selEl = geometry.elements.find((e) => e.id === selectedId);
+        if (!selEl || (selEl.type !== 'door' && selEl.type !== 'window')) return null;
+        return (
+          <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-20 bg-slate-800/90 text-white text-xs px-3 py-1 rounded-full backdrop-blur pointer-events-none">
+            ← → поворот · Свойства — точный угол
+          </div>
+        );
+      })()}
 
       {/* Minimap - floating bottom-right */}
       <div className="absolute bottom-3 right-3 z-10">

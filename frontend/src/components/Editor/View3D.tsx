@@ -174,39 +174,75 @@ function WindowMesh({ el }: { el: GeometryElement }) {
   );
 }
 
-// --- Door as a panel in a wall, oriented along wall ---
+// --- Door as a recognisable open-door symbol in 3D ---
 function DoorMesh({ el }: { el: GeometryElement }) {
   const x = el.x ?? 0;
   const z = el.y ?? 0;
   const width = el.width ?? 0.9;
   const height = el.height ?? 2.1;
   const angle = el.rotation ?? 0;
-  const wallThickness = 0.12;
-  const mat = MATERIALS.door;
+  const wallThick = 0.18;
+  const flip = el.flipSwing ? -1 : 1;
+  const FRAME = 0.07; // jamb / lintel thickness
+  const LEAF_T = 0.05; // door leaf thickness
 
   return (
-    <group position={[x, height / 2, z]} rotation={[0, -angle, 0]}>
-      {/* Door panel */}
-      <mesh castShadow>
-        <boxGeometry args={[width, height, wallThickness]} />
-        <meshStandardMaterial color={mat.color} roughness={0.7} />
+    // Group placed at floor level, then rotated to wall orientation
+    <group position={[x, 0, z]} rotation={[0, -angle, 0]}>
+
+      {/* ── Void fill: covers the wall slice so the opening looks empty ── */}
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[width, height, wallThick + 0.02]} />
+        <meshStandardMaterial color="#f5ebe0" roughness={1} metalness={0} />
       </mesh>
-      {/* Door frame */}
-      {[
-        { pos: [0,  height / 2, 0] as [number,number,number], args: [width + 0.08, 0.06, wallThickness + 0.04] as [number,number,number] },
-        { pos: [-width / 2, 0, 0] as [number,number,number], args: [0.06, height + 0.06, wallThickness + 0.04] as [number,number,number] },
-        { pos: [ width / 2, 0, 0] as [number,number,number], args: [0.06, height + 0.06, wallThickness + 0.04] as [number,number,number] },
-      ].map((f, i) => (
-        <mesh key={i} position={f.pos}>
-          <boxGeometry args={f.args} />
-          <meshStandardMaterial color="#7f5539" roughness={0.7} />
+
+      {/* ── Door frame: left jamb ── */}
+      <mesh position={[-width / 2 + FRAME / 2, height / 2, 0]}>
+        <boxGeometry args={[FRAME, height + FRAME, wallThick + 0.06]} />
+        <meshStandardMaterial color="#6b3f18" roughness={0.8} />
+      </mesh>
+
+      {/* ── Door frame: right jamb ── */}
+      <mesh position={[width / 2 - FRAME / 2, height / 2, 0]}>
+        <boxGeometry args={[FRAME, height + FRAME, wallThick + 0.06]} />
+        <meshStandardMaterial color="#6b3f18" roughness={0.8} />
+      </mesh>
+
+      {/* ── Door frame: lintel ── */}
+      <mesh position={[0, height + FRAME / 2, 0]}>
+        <boxGeometry args={[width, FRAME, wallThick + 0.06]} />
+        <meshStandardMaterial color="#6b3f18" roughness={0.8} />
+      </mesh>
+
+      {/* ── Door leaf: hinge at left jamb inner edge, open ~68° ── */}
+      <group
+        position={[-width / 2 + FRAME, 0, -wallThick / 2]}
+        rotation={[0, flip * 1.2, 0]}   // ~68° from closed position
+      >
+        {/* Panel */}
+        <mesh position={[(width - FRAME) / 2, (height - FRAME) / 2, LEAF_T / 2]}>
+          <boxGeometry args={[width - FRAME, height - FRAME, LEAF_T]} />
+          <meshStandardMaterial color="#fca5a5" roughness={0.6} />
         </mesh>
-      ))}
-      {/* Door knob */}
-      <mesh position={[width / 2 - 0.1, -0.1, wallThickness / 2 + 0.04]}>
-        <sphereGeometry args={[0.04, 8, 8]} />
-        <meshStandardMaterial color="#c0a080" metalness={0.8} roughness={0.2} />
-      </mesh>
+
+        {/* Upper inset panel */}
+        <mesh position={[(width - FRAME) / 2, (height - FRAME) * 0.72, LEAF_T / 2 + 0.01]}>
+          <boxGeometry args={[(width - FRAME) * 0.75, (height - FRAME) * 0.3, 0.012]} />
+          <meshStandardMaterial color="#f87171" roughness={0.5} />
+        </mesh>
+
+        {/* Lower inset panel */}
+        <mesh position={[(width - FRAME) / 2, (height - FRAME) * 0.32, LEAF_T / 2 + 0.01]}>
+          <boxGeometry args={[(width - FRAME) * 0.75, (height - FRAME) * 0.42, 0.012]} />
+          <meshStandardMaterial color="#f87171" roughness={0.5} />
+        </mesh>
+
+        {/* Door knob */}
+        <mesh position={[width - FRAME - 0.12, (height - FRAME) * 0.45, LEAF_T + 0.03]}>
+          <sphereGeometry args={[0.03, 8, 8]} />
+          <meshStandardMaterial color="#c8a060" metalness={0.9} roughness={0.1} />
+        </mesh>
+      </group>
     </group>
   );
 }
